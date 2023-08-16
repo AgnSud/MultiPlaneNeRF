@@ -251,10 +251,10 @@ class MultiImageNeRF(torch.nn.Module):
     def parameters(self):
         return self.render_network.parameters()
         
-    def forward(self, x):
+    def forward(self, x, ts):
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         x = self.image_plane(input_pts)
-        return self.render_network(x, input_views)
+        return self.render_network(x, input_views), torch.zeros_like(input_pts[:, :3])
 
 class EmbeddedMultiImageNeRF(torch.nn.Module):
     

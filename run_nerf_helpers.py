@@ -45,13 +45,13 @@ class Embedder:
         return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
 
 
-def get_embedder(multires, i=0):
+def get_embedder(multires, input_dims, i=0):
     if i == -1:
-        return nn.Identity(), 3
+        return nn.Identity(), input_dims
     
     embed_kwargs = {
                 'include_input' : True,
-                'input_dims' : 3,
+                'input_dims' : input_dims,
                 'max_freq_log2' : multires-1,
                 'num_freqs' : multires,
                 'log_sampling' : True,
@@ -65,7 +65,8 @@ def get_embedder(multires, i=0):
 
 # Model
 class NeRF(nn.Module):
-    def __init__(self, D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+    def __init__(self, D=8, W=256, input_ch=3, input_ch_views=3, input_ch_time=1, output_ch=4, skips=[4],
+                 use_viewdirs=False):
         """ 
         """
         super(NeRF, self).__init__()
@@ -73,6 +74,7 @@ class NeRF(nn.Module):
         self.W = W
         self.input_ch = input_ch
         self.input_ch_views = input_ch_views
+        self.input_ch_time = input_ch_time
         self.skips = skips
         self.use_viewdirs = use_viewdirs
         
@@ -93,7 +95,7 @@ class NeRF(nn.Module):
         else:
             self.output_linear = nn.Linear(W, output_ch)
 
-    def forward(self, x):
+    def forward(self, x, ts):
         input_pts, input_views = torch.split(x, [self.input_ch, self.input_ch_views], dim=-1)
         h = input_pts
         for i, l in enumerate(self.pts_linears):

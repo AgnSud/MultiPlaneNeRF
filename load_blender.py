@@ -43,36 +43,47 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
 
     all_imgs = []
     all_poses = []
+    all_times = []
     counts = [0]
     for s in splits:
         meta = metas[s]
         imgs = []
         poses = []
+        times = []
         if s=='train' or testskip==0:
             skip = 1
         else:
             skip = testskip
             
-        for frame in meta['frames'][::skip]:
+        for t, frame in enumerate(meta['frames'][::skip]):
             fname = os.path.join(basedir, frame['file_path'] + '.png')
             imgs.append(imageio.imread(fname))
             poses.append(np.array(frame['transform_matrix']))
-        imgs = (np.array(imgs) / 255.).astype(np.float32) # keep all 4 channels (RGBA)
+            cur_time = frame['time'] if 'time' in frame else float(t) / (len(meta['frames'][::skip]) - 1)
+            times.append(cur_time)
+
+        assert times[0] == 0, "Time must start at 0"
+
+        imgs = (np.array(imgs) / 255.).astype(np.float32)  # keep all 4 channels (RGBA)
         poses = np.array(poses).astype(np.float32)
+        times = np.array(times).astype(np.float32)
         counts.append(counts[-1] + imgs.shape[0])
         all_imgs.append(imgs)
         all_poses.append(poses)
+        all_times.append(times)
     
     i_split = [np.arange(counts[i], counts[i+1]) for i in range(3)]
     
     imgs = np.concatenate(all_imgs, 0)
     poses = np.concatenate(all_poses, 0)
+    times = np.concatenate(all_times, 0)
     
     H, W = imgs[0].shape[:2]
     camera_angle_x = float(meta['camera_angle_x'])
     focal = .5 * W / np.tan(.5 * camera_angle_x)
     
     render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
+    render_times = torch.linspace(0., 1., render_poses.shape[0])
 
     if divide_fac != 1:
         H = H//divide_fac
@@ -86,6 +97,6 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         print(imgs.dtype)
         imgs = imgs.astype(np.float32)
 
-    return imgs, poses, render_poses, [H, W, focal], i_split
+    return imgs, poses, times, render_poses, render_times, [H, W, focal], i_split
 
 

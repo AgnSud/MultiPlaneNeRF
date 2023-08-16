@@ -33,26 +33,51 @@ def batchify(fn, chunk):
     """
     if chunk is None:
         return fn
-    def ret(inputs):
-        return torch.cat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
+    def ret(inputs_pos, inputs_time):
+        num_batches = inputs_pos.shape[0]
+
+        out_list = []
+        dx_list = []
+        for i in range(0, num_batches, chunk):
+            out, dx = fn(inputs_pos[i:i+chunk], [inputs_time[0][i:i+chunk], inputs_time[1][i:i+chunk]])
+            out_list += [out]
+            dx_list += [dx]
+        return torch.cat(out_list, 0), torch.cat(dx_list, 0)
     return ret
 
 
-def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
+def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedtime_fn, netchunk=1024*64,
+                embd_time_discr=True):
     """Prepares inputs and applies network 'fn'.
     """
+    assert len(torch.unique(frame_time)) == 1, "Only accepts all points from same time"
+    cur_time = torch.unique(frame_time)[0]
+
     inputs_flat = torch.reshape(inputs, [-1, inputs.shape[-1]])
     embedded = embed_fn(inputs_flat)
 
+    # embed time
+    if embd_time_discr:
+        B, N, _ = inputs.shape
+        input_frame_time = frame_time[:, None].expand([B, N, 1])
+        input_frame_time_flat = torch.reshape(input_frame_time, [-1, 1])
+        embedded_time = embedtime_fn(input_frame_time_flat)
+        embedded_times = [embedded_time, embedded_time]
+
+    else:
+        assert NotImplementedError
+
+    # embed views
     if viewdirs is not None:
         input_dirs = viewdirs[:,None].expand(inputs.shape)
         input_dirs_flat = torch.reshape(input_dirs, [-1, input_dirs.shape[-1]])
         embedded_dirs = embeddirs_fn(input_dirs_flat)
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
-    outputs_flat = batchify(fn, netchunk)(embedded)
+    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times)
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-    return outputs
+    position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
+    return outputs, position_delta
 
 
 def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
@@ -71,7 +96,7 @@ def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
 
 
 def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
-                  near=0., far=1.,
+                  near=0., far=1., frame_time=None,
                   use_viewdirs=False, c2w_staticcam=None,
                   **kwargs):
     """Render rays
@@ -122,7 +147,8 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     rays_d = torch.reshape(rays_d, [-1,3]).float()
 
     near, far = near * torch.ones_like(rays_d[...,:1]), far * torch.ones_like(rays_d[...,:1])
-    rays = torch.cat([rays_o, rays_d, near, far], -1)
+    frame_time = frame_time * torch.ones_like(rays_d[..., :1])
+    rays = torch.cat([rays_o, rays_d, near, far, frame_time], -1)
     if use_viewdirs:
         rays = torch.cat([rays, viewdirs], -1)
 
@@ -138,7 +164,7 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     return ret_list + [ret_dict]
 
 
-def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
+def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
     H, W, focal = hwf
 
     if render_factor!=0:
@@ -151,10 +177,10 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
     disps = []
 
     t = time.time()
-    for i, c2w in enumerate(tqdm(render_poses)):
+    for i, (c2w, frame_time) in enumerate(zip(tqdm(render_poses), render_times)):
         print(i, time.time() - t)
         t = time.time()
-        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], **render_kwargs)
+        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], frame_time=frame_time, **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
 
@@ -166,19 +192,19 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
     rgbs = np.stack(rgbs, 0)
     
     print(type(gt_imgs))
-    ssim_f = StructuralSimilarityIndexMeasure().to('cpu')
-    img_ssim = ssim_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
-
-    lpips_f = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to('cpu')
-    img_lpips = lpips_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
-    
-    rgbss = np.array(rgbs)
-    gts = np.array(gt_imgs)
-
-    p = -10. * np.log10(np.mean(np.square(rgbss - gts)))
-    print(" CALCULATED PSNR FOR TESTSET")
-    with open(os.path.join(savedir, 'result.txt'), 'w') as f:
-        f.write(f"psnr: {p}\nssim: {img_ssim}\nlpips: {img_lpips}")
+    # ssim_f = StructuralSimilarityIndexMeasure().to('cpu')
+    # img_ssim = ssim_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
+    #
+    # lpips_f = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to('cpu')
+    # img_lpips = lpips_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
+    #
+    # rgbss = np.array(rgbs)
+    # gts = np.array(gt_imgs)
+    #
+    # p = -10. * np.log10(np.mean(np.square(rgbss - gts)))
+    # print(" CALCULATED PSNR FOR TESTSET")
+    # with open(os.path.join(savedir, 'result.txt'), 'w') as f:
+    #     f.write(f"psnr: {p}\nssim: {img_ssim}\nlpips: {img_lpips}")
         
     disps = np.stack(disps, 0)
     return rgbs, disps
@@ -187,31 +213,35 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
 def create_nerf(args):
     """Instantiate NeRF's MLP model.
     """
-    embed_fn, input_ch = get_embedder(args.multires, args.i_embed)
+    embed_fn, input_ch = get_embedder(args.multires, 3, args.i_embed)
+    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, args.i_embed)
 
     input_ch_views = 0
     embeddirs_fn = None
     
     if args.use_viewdirs:
-        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, args.i_embed)
+        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 3, args.i_embed)
         
     output_ch = 5 if args.N_importance > 0 else 4
     skips = [4]
     model = NeRF(D=args.netdepth, W=args.netwidth,
                  input_ch=input_ch, output_ch=output_ch, skips=skips,
-                 input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+                 input_ch_views=input_ch_views, input_ch_time=input_ch_time,
+                 use_viewdirs=args.use_viewdirs).to(device)
     grad_vars = list(model.parameters())
 
     model_fine = None
     if args.N_importance > 0:
         model_fine = NeRF(D=args.netdepth_fine, W=args.netwidth_fine,
                           input_ch=input_ch, output_ch=output_ch, skips=skips,
-                          input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+                          input_ch_views=input_ch_views, input_ch_time=input_ch_time,
+                          use_viewdirs=args.use_viewdirs).to(device)
         grad_vars += list(model_fine.parameters())
 
-    network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
                                                                 embed_fn=embed_fn,
                                                                 embeddirs_fn=embeddirs_fn,
+                                                                embedtime_fn=embedtime_fn,
                                                                 netchunk=args.netchunk)
 
     # Create optimizer
@@ -273,12 +303,13 @@ def create_nerf(args):
 def create_mi_nerf(plane, args):
     """Instantiate NeRF's MLP model.
     """
-    embed_fn, input_ch = get_embedder(args.multires, -1)
+    embed_fn, input_ch = get_embedder(args.multires, 3, -1)
+    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, -1)
 
     input_ch_views = 0
     embeddirs_fn = None
     if args.use_viewdirs:
-        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, args.i_embed)
+        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 3, -1)
     output_ch = 5 if args.N_importance > 0 else 4
     
     print("angles!!!", input_ch_views)
@@ -286,15 +317,17 @@ def create_mi_nerf(plane, args):
     model = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
     grad_vars = list(model.parameters())
 
-    network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
-                                                                embed_fn=embed_fn,
-                                                                embeddirs_fn=embeddirs_fn,
-                                                                netchunk=args.netchunk)
-    
     model_fine = None
     if args.N_importance > 0:
         model_fine = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
         grad_vars += list(model_fine.parameters())
+
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
+                                                                embed_fn=embed_fn,
+                                                                embeddirs_fn=embeddirs_fn,
+                                                                embedtime_fn=embedtime_fn,
+                                                                netchunk=args.netchunk)
+
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -443,8 +476,8 @@ def render_rays(ray_batch,
     N_rays = ray_batch.shape[0]
     rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
     viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
-    bounds = torch.reshape(ray_batch[...,6:8], [-1,1,2])
-    near, far = bounds[...,0], bounds[...,1] # [-1,1]
+    bounds = torch.reshape(ray_batch[...,6:9], [-1,1,3])
+    near, far, frame_time = bounds[...,0], bounds[...,1], bounds[...,2] # [-1,1]
 
     t_vals = torch.linspace(0., 1., steps=N_samples)
     if not lindisp:
@@ -474,7 +507,7 @@ def render_rays(ray_batch,
 
 
 #     raw = run_network(pts)
-    raw = network_query_fn(pts, viewdirs, network_fn)
+    raw, position_delta = network_query_fn(pts, viewdirs, frame_time, network_fn)
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
     if N_importance > 0:
@@ -490,7 +523,7 @@ def render_rays(ray_batch,
 
         run_fn = network_fn if network_fine is None else network_fine
 #         raw = run_network(pts, fn=run_fn)
-        raw = network_query_fn(pts, viewdirs, run_fn)
+        raw, position_delta = network_query_fn(pts, viewdirs, frame_time, run_fn)
 
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
@@ -524,6 +557,8 @@ def config_parser():
                         help='input data directory')
 
     # training options
+    parser.add_argument("--N_iter", type=int, default=500000,
+                        help='num training iterations')
     parser.add_argument("--netdepth", type=int, default=8, 
                         help='layers in network')
     parser.add_argument("--netwidth", type=int, default=256, 
@@ -666,7 +701,7 @@ def train():
         print('NEAR FAR', near, far)
 
     elif args.dataset_type == 'blender':
-        images, poses, render_poses, hwf, i_split = load_blender_data(args.datadir, args.divide_fac, args.testskip)
+        images, poses, times, render_poses, render_times, hwf, i_split = load_blender_data(args.datadir, args.divide_fac, args.testskip)
         print('Loaded blender', images.shape, render_poses.shape, hwf, args.datadir)
         print(i_split)
         i_train, i_val, i_test = i_split
@@ -707,6 +742,11 @@ def train():
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
 
+    # note: changes only in dataset_type == blender, assumption it'll be dataset type
+    min_time, max_time = times[i_train[0]], times[i_train[-1]]
+    assert min_time == 0., "time must start at 0"
+    assert max_time == 1., "max time must be 1"
+
     # Cast intrinsics to right types
     H, W, focal = hwf
     H, W = int(H), int(W)
@@ -721,6 +761,7 @@ def train():
 
     if args.render_test:
         render_poses = np.array(poses[i_test])
+        render_times = np.array(times[i_test])
 
     # Create log dir and copy the config file
     basedir = args.basedir
@@ -754,6 +795,7 @@ def train():
 
     # Move testing data to GPU
     render_poses = torch.Tensor(render_poses).to(device)
+    render_times = torch.Tensor(render_times).to(device)
 
     # Short circuit if only rendering out from trained model
     if args.render_only:
@@ -770,7 +812,8 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', render_poses.shape)
 
-            rgbs, _ = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images, savedir=testsavedir, render_factor=args.render_factor)
+            rgbs, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images,
+                                  savedir=testsavedir, render_factor=args.render_factor)
             print('Done rendering', testsavedir)
             imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
 
@@ -796,14 +839,17 @@ def train():
         i_batch = 0
 
     # Move training data to GPU
-    if use_batching:
-        images = torch.Tensor(images).to(device)
+    # remove if use_batching for images
+    # if use_batching:
+    #     images = torch.Tensor(images).to(device)
+    images = torch.Tensor(images).to(device)
     poses = torch.Tensor(poses).to(device)
+    times = torch.Tensor(times).to(device)
     if use_batching:
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
 
-    N_iters = 1000000 + 1
+    N_iters = args.N_iter + 1
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
@@ -819,6 +865,8 @@ def train():
 
         # Sample random ray batch
         if use_batching:
+            raise NotImplementedError("Time not implemented")
+
             # Random over all images
             batch = rays_rgb[i_batch:i_batch+N_rand] # [B, 2+1, 3*?]
             batch = torch.transpose(batch, 0, 1)
@@ -837,6 +885,7 @@ def train():
             target = images[img_i]
             target = torch.Tensor(target).to(device)
             pose = poses[img_i, :3,:4]
+            frame_time = times[img_i]
 
             if N_rand is not None:
                 rays_o, rays_d = get_rays(H, W, K, torch.Tensor(pose))  # (H, W, 3), (H, W, 3)
@@ -863,7 +912,7 @@ def train():
                 target_s = target[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
 
         #####  Core optimization loop  #####
-        rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, rays=batch_rays,
+        rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, rays=batch_rays, frame_time=frame_time,
                                                 verbose=i < 10, retraw=True,
                                                 **render_kwargs_train)
 
@@ -898,19 +947,28 @@ def train():
 
         # Rest is logging
         if i%args.i_weights==0:
-            path = os.path.join(basedir, expname, '{:06d}.tar'.format(i))
-            torch.save({
-                'global_step': global_step,
-                'network_fn_state_dict': render_kwargs_train['network_fn'].state_dict(),
-                'network_fine_state_dict': render_kwargs_train['network_fine'].state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }, path)
-            print('Saved checkpoints at', path)
+            if render_kwargs_train['network_fine'] is None:
+                path = os.path.join(basedir, expname, '{:06d}.tar'.format(i))
+                torch.save({
+                    'global_step': global_step,
+                    'network_fn_state_dict': render_kwargs_train['network_fn'].state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                }, path)
+                print('Saved checkpoints at', path)
+            else:
+                path = os.path.join(basedir, expname, '{:06d}.tar'.format(i))
+                torch.save({
+                    'global_step': global_step,
+                    'network_fn_state_dict': render_kwargs_train['network_fn'].state_dict(),
+                    'network_fine_state_dict': render_kwargs_train['network_fine'].state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                }, path)
+                print('Saved checkpoints at', path)
 
         if (i%args.i_video==0 and i > 0):
             # Turn on testing mode
             with torch.no_grad():
-                rgbs, disps = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
+                rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
             print('Done, saving', rgbs.shape, disps.shape)
             moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
@@ -921,7 +979,7 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
-                render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+                render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
     
