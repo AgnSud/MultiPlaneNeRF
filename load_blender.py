@@ -57,14 +57,27 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
             
         for t, frame in enumerate(meta['frames'][::skip]):
             fname = os.path.join(basedir, frame['file_path'] + '.png')
-            imgs.append(imageio.imread(fname))
-            poses.append(np.array(frame['transform_matrix']))
+            img = imageio.imread(fname)
+
+            # create channel
             cur_time = frame['time'] if 'time' in frame else float(t) / (len(meta['frames'][::skip]) - 1)
+            time_channel = np.full_like(img[:, :, 0], cur_time, dtype=np.float32)  # Assuming img is (H, W, 4) for RGBA
+            # print("time channel", time_channel)
+
+            # add channel to img
+            # img_with_time = np.dstack((img, time_channel[:, :, np.newaxis]))
+            img_with_time = np.dstack((img, time_channel))
+            # print("image with time", img_with_time)
+            imgs.append(img_with_time)
+            poses.append(np.array(frame['transform_matrix']))
             times.append(cur_time)
 
         assert times[0] == 0, "Time must start at 0"
 
-        imgs = (np.array(imgs) / 255.).astype(np.float32)  # keep all 4 channels (RGBA)
+        imgs = np.array(imgs).astype(np.float32)  # keep all 5 channels (RGBA)
+        print("Before div", imgs[:, 400, 400, :4], "!!!!!!!")
+        imgs[:, :, :, :4] = imgs[:, :, :, :4] / 255.
+        print("After div", imgs[:, 400, 400, :4], "?????????")
         poses = np.array(poses).astype(np.float32)
         times = np.array(times).astype(np.float32)
         counts.append(counts[-1] + imgs.shape[0])
@@ -90,7 +103,7 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         W = W//divide_fac
         focal = focal/divide_fac
 
-        imgs_half_res = np.zeros((imgs.shape[0], H, W, 4))
+        imgs_half_res = np.zeros((imgs.shape[0], H, W, 5))
         for i, img in enumerate(imgs):
             imgs_half_res[i] = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
         imgs = imgs_half_res

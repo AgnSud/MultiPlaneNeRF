@@ -1,4 +1,4 @@
-expname = dnerf_first_change_standup
+expname = dnerf_add_time_channel
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
