@@ -303,13 +303,13 @@ def create_nerf(args):
 def create_mi_nerf(plane, args):
     """Instantiate NeRF's MLP model.
     """
-    embed_fn, input_ch = get_embedder(args.multires, 3, -1)
+    embed_fn, input_ch = get_embedder(args.multires, 4, -1)
     embedtime_fn, input_ch_time = get_embedder(args.multires, 1, -1)
 
     input_ch_views = 0
     embeddirs_fn = None
     if args.use_viewdirs:
-        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 3, -1)
+        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 4, -1)
     output_ch = 5 if args.N_importance > 0 else 4
     
     print("angles!!!", input_ch_views)
@@ -709,10 +709,15 @@ def train():
         near = 2.
         far = 6.
 
+        print("Before", images[15])
         if args.white_bkgd:
-            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
+            # images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
+            fifth_channel = images[..., -1:]
+            rgb_channels = images[..., :3] * images[..., 3:4] + (1. - images[..., 3:4])
+            images = np.concatenate((rgb_channels, fifth_channel), axis=3)
         else:
-            images = images[...,:3]
+            images = np.delete(images, 3, axis=3)  # only RGB channels + time channel
+        print("After", images[15])
 
     elif args.dataset_type == 'LINEMOD':
         images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(args.datadir, args.half_res, args.testskip)

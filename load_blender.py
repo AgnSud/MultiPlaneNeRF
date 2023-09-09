@@ -75,9 +75,9 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         assert times[0] == 0, "Time must start at 0"
 
         imgs = np.array(imgs).astype(np.float32)  # keep all 5 channels (RGBA)
-        print("Before div", imgs[:, 400, 400, :4], "!!!!!!!")
+        # print("Before div", imgs[:, 400, 400, :4], "!!!!!!!")
         imgs[:, :, :, :4] = imgs[:, :, :, :4] / 255.
-        print("After div", imgs[:, 400, 400, :4], "?????????")
+        # print("After div", imgs[:, 400, 400, :4], "?????????")
         poses = np.array(poses).astype(np.float32)
         times = np.array(times).astype(np.float32)
         counts.append(counts[-1] + imgs.shape[0])
