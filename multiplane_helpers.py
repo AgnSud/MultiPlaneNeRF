@@ -7,7 +7,8 @@ class RenderNetwork(torch.nn.Module):
         dir_count
     ):
         super().__init__()
-        self.input_size = 3*input_size + input_size*2
+        self.input_size = 3*input_size + input_size*3
+        print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
               torch.nn.Linear(self.input_size, 256),
               torch.nn.ReLU(),
@@ -252,6 +253,7 @@ class MultiImageNeRF(torch.nn.Module):
         return self.render_network.parameters()
         
     def forward(self, x, ts):
+        # print("Calling now", x)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         x = self.image_plane(input_pts)
         return self.render_network(x, input_views), torch.zeros_like(input_pts[:, :3])

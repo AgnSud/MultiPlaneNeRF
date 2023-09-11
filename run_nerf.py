@@ -149,6 +149,7 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     near, far = near * torch.ones_like(rays_d[...,:1]), far * torch.ones_like(rays_d[...,:1])
     frame_time = frame_time * torch.ones_like(rays_d[..., :1])
     rays = torch.cat([rays_o, rays_d, near, far, frame_time], -1)
+    # rays = torch.cat([rays_o, rays_d, near, far], -1)
     if use_viewdirs:
         rays = torch.cat([rays, viewdirs], -1)
 
@@ -303,13 +304,13 @@ def create_nerf(args):
 def create_mi_nerf(plane, args):
     """Instantiate NeRF's MLP model.
     """
-    embed_fn, input_ch = get_embedder(args.multires, 4, -1)
+    embed_fn, input_ch = get_embedder(args.multires, 3, -1)
     embedtime_fn, input_ch_time = get_embedder(args.multires, 1, -1)
 
     input_ch_views = 0
     embeddirs_fn = None
     if args.use_viewdirs:
-        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 4, -1)
+        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, 3, -1)
     output_ch = 5 if args.N_importance > 0 else 4
     
     print("angles!!!", input_ch_views)
@@ -709,7 +710,7 @@ def train():
         near = 2.
         far = 6.
 
-        print("Before", images[15])
+        # print("Before", images[15])
         if args.white_bkgd:
             # images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
             fifth_channel = images[..., -1:]
@@ -717,7 +718,7 @@ def train():
             images = np.concatenate((rgb_channels, fifth_channel), axis=3)
         else:
             images = np.delete(images, 3, axis=3)  # only RGB channels + time channel
-        print("After", images[15])
+        # print("After", images[15])
 
     elif args.dataset_type == 'LINEMOD':
         images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(args.datadir, args.half_res, args.testskip)
@@ -888,8 +889,9 @@ def train():
             # Random from one image
             img_i = np.random.choice(i_train)
             target = images[img_i]
+            target = target[:, :, :-1]
             target = torch.Tensor(target).to(device)
-            pose = poses[img_i, :3,:4]
+            pose = poses[img_i, :3, :4]
             frame_time = times[img_i]
 
             if N_rand is not None:
@@ -922,6 +924,8 @@ def train():
                                                 **render_kwargs_train)
 
         optimizer.zero_grad()
+        # print("RGB ", rgb)
+        # print("target ", target_s)
         img_loss = img2mse(rgb, target_s)
         trans = extras['raw'][...,-1]
         loss = img_loss
