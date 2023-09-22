@@ -7,7 +7,7 @@ class RenderNetwork(torch.nn.Module):
         dir_count
     ):
         super().__init__()
-        self.input_size = 3*input_size + input_size*3
+        self.input_size = 3*input_size + input_size*3 + 1
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
               torch.nn.Linear(self.input_size, 256),
@@ -48,7 +48,7 @@ class RenderNetwork(torch.nn.Module):
             torch.nn.Linear(256, 3),
         )
 
-    def forward(self, triplane_code, dirs):
+    def forward(self, triplane_code, dirs, time_channel):
         x = self.layers_main(triplane_code)
         x1 = torch.concat([x, triplane_code], dim=1)
         
@@ -56,7 +56,7 @@ class RenderNetwork(torch.nn.Module):
         xs = torch.concat([x, triplane_code], dim=1)
         
         sigma = self.layers_sigma(xs)
-        x = torch.concat([x, triplane_code, dirs], dim=1)
+        x = torch.concat([x, triplane_code, dirs, time_channel], dim=1)
         rgb = self.layers_rgb(x)
         return torch.concat([rgb, sigma], dim=1)
     
@@ -109,6 +109,7 @@ class ImagePlanes(torch.nn.Module):
         self.pose_matrices = []
         self.K_matrices = []
         self.images = []
+        self.time_channel = []  # time channels
 
         self.focal = focal
         for i in range(min(count, poses.shape[0])):
@@ -130,6 +131,7 @@ class ImagePlanes(torch.nn.Module):
         self.pose_matrices = torch.stack(self.pose_matrices).to(device)
         self.K_matrices = torch.stack(self.K_matrices).to(device)
         self.image_plane = torch.stack(self.images).to(device)
+        self.time_channels = torch.stack(self.time_channels).to(device)  # list to tensor
         
 
     def forward(self, points=None):
@@ -156,7 +158,10 @@ class ImagePlanes(torch.nn.Module):
         feats = feats.permute(2,3,0,1)
         feats = feats.flatten(2)
         feats = torch.cat((feats[0], pixels), 1)
-        return feats
+
+        time_channel = self.time_channels
+
+        return feats, time_channel
     
     
 class LLFFImagePlanes(torch.nn.Module):
@@ -248,15 +253,16 @@ class MultiImageNeRF(torch.nn.Module):
         self.render_network = RenderNetwork(count, dir_count)
         
         self.input_ch_views = dir_count
-        
+        self.input_ch_time = 1  # rozmiar kanału czasu
+
     def parameters(self):
         return self.render_network.parameters()
         
     def forward(self, x, ts):
-        # print("Calling now", x)
+        print("Calling now", x.shape)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
-        x = self.image_plane(input_pts)
-        return self.render_network(x, input_views), torch.zeros_like(input_pts[:, :3])
+        x, time_channel = self.image_plane(input_pts)
+        return self.render_network(x, input_views, time_channel), torch.zeros_like(input_pts[:, :3])
 
 class EmbeddedMultiImageNeRF(torch.nn.Module):
     

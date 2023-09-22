@@ -785,6 +785,7 @@ def train():
 
     # Create nerf model
     print("images: ", args.mi_count)
+    print(images[0])
     if args.dataset_type != 'llff':
         render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(ImagePlanes(focal, poses, images, args.mi_count), args) #create_nerf(args)
     else:

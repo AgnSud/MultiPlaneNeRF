@@ -5,6 +5,7 @@ import imageio
 import json
 import torch.nn.functional as F
 import cv2
+from run_nerf_helpers import *
 
 
 trans_t = lambda t : torch.Tensor([
@@ -63,6 +64,12 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
             cur_time = frame['time'] if 'time' in frame else float(t) / (len(meta['frames'][::skip]) - 1)
             time_channel = np.full_like(img[:, :, 0], cur_time, dtype=np.float32)  # Assuming img is (H, W, 4) for RGBA
             # print("time channel", time_channel)
+
+            #embedder time channel (args.multires = 10)
+            # print("Before", time_channel)
+            # embed_fn, out_dim = get_embedder(10, 1)
+            # embedded_time_channel = embed_fn(time_channel)
+            # print("After", embedded_time_channel)
 
             # add channel to img
             # img_with_time = np.dstack((img, time_channel[:, :, np.newaxis]))
