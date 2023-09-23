@@ -109,7 +109,7 @@ class ImagePlanes(torch.nn.Module):
         self.pose_matrices = []
         self.K_matrices = []
         self.images = []
-        self.time_channel = []  # time channels
+        self.time_channels = []  # time channels
 
         self.focal = focal
         for i in range(min(count, poses.shape[0])):
@@ -127,6 +127,9 @@ class ImagePlanes(torch.nn.Module):
             K = torch.Tensor([[self.focal.item(), 0, 0.5*image.shape[0]], [0, self.focal.item(), 0.5*image.shape[0]], [0, 0, 1]])
 
             self.K_matrices.append(K)
+
+            time_channel = image[:, :, -1:]  # Time channel, the last column
+            self.time_channels.append(time_channel)
 
         self.pose_matrices = torch.stack(self.pose_matrices).to(device)
         self.K_matrices = torch.stack(self.K_matrices).to(device)
