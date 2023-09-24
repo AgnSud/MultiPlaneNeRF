@@ -7,7 +7,7 @@ class RenderNetwork(torch.nn.Module):
         dir_count
     ):
         super().__init__()
-        self.input_size = 3*input_size + input_size*3 + 1
+        self.input_size = 3*input_size + input_size*4
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
               torch.nn.Linear(self.input_size, 256),
@@ -49,6 +49,9 @@ class RenderNetwork(torch.nn.Module):
         )
 
     def forward(self, triplane_code, dirs, time_channel):
+        # print("Kanał czasu:", time_channel.shape)
+        # print("triplane_code:", triplane_code.shape)
+        triplane_code = torch.concat([triplane_code], dim=1)
         x = self.layers_main(triplane_code)
         x1 = torch.concat([x, triplane_code], dim=1)
         
@@ -56,7 +59,7 @@ class RenderNetwork(torch.nn.Module):
         xs = torch.concat([x, triplane_code], dim=1)
         
         sigma = self.layers_sigma(xs)
-        x = torch.concat([x, triplane_code, dirs, time_channel], dim=1)
+        x = torch.concat([x, triplane_code, dirs], dim=1)
         rgb = self.layers_rgb(x)
         return torch.concat([rgb, sigma], dim=1)
     
@@ -122,14 +125,14 @@ class ImagePlanes(torch.nn.Module):
 
             image = images[i]
             image = torch.from_numpy(image)
-            self.images.append(image.permute(2,0,1))
+            self.images.append(image.permute(2, 0, 1))
             self.size = float(image.shape[0])
             K = torch.Tensor([[self.focal.item(), 0, 0.5*image.shape[0]], [0, self.focal.item(), 0.5*image.shape[0]], [0, 0, 1]])
 
             self.K_matrices.append(K)
 
             time_channel = image[:, :, -1:]  # Time channel, the last column
-            self.time_channels.append(time_channel)
+            self.time_channels.append(time_channel.permute(2, 0, 1))
 
         self.pose_matrices = torch.stack(self.pose_matrices).to(device)
         self.K_matrices = torch.stack(self.K_matrices).to(device)
@@ -150,17 +153,34 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels.permute(0,2,1)
 
         feats = []
+        times = []
         for img in range(self.image_plane.shape[0]):
             feat = torch.nn.functional.grid_sample(
                 self.image_plane[img].unsqueeze(0),
                 pixels[img].unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
             feats.append(feat)
+
+            print("time_channels ", self.time_channels[img].shape)
+            print("time_channels unsqueezed", self.time_channels[img].unsqueeze(0).shape)
+            tc_dim = torch.nn.functional.grid_sample(
+                self.time_channels[img].unsqueeze(0),
+                pixels[img].unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
+            times.append(tc_dim)
+            print("tc_dim ", tc_dim.shape)
+
         feats = torch.stack(feats).squeeze(1)
-        pixels = pixels.permute(1,0,2)
+        times = torch.stack(times).squeeze(1)
+
+        pixels = pixels.permute(1, 0, 2)
         pixels = pixels.flatten(1)
-        feats = feats.permute(2,3,0,1)
+
+        feats = feats.permute(2, 3, 0, 1)
         feats = feats.flatten(2)
-        feats = torch.cat((feats[0], pixels), 1)
+
+        times = times.permute(2, 3, 0, 1)
+        times = times.flatten(2)
+
+        feats = torch.cat((feats[0], times[0], pixels), 1)
 
         time_channel = self.time_channels
 
