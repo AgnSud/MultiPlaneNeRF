@@ -1,4 +1,4 @@
-expname = dnerf_change_network
+expname = dnerf_change_multiplane_helpers
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender

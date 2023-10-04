@@ -48,9 +48,7 @@ class RenderNetwork(torch.nn.Module):
             torch.nn.Linear(256, 3),
         )
 
-    def forward(self, triplane_code, dirs, time_channel):
-        # print("Kanał czasu:", time_channel.shape)
-        # print("triplane_code:", triplane_code.shape)
+    def forward(self, triplane_code, dirs):
         triplane_code = torch.concat([triplane_code], dim=1)
         x = self.layers_main(triplane_code)
         x1 = torch.concat([x, triplane_code], dim=1)
@@ -160,13 +158,10 @@ class ImagePlanes(torch.nn.Module):
                 pixels[img].unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
             feats.append(feat)
 
-            print("time_channels ", self.time_channels[img].shape)
-            print("time_channels unsqueezed", self.time_channels[img].unsqueeze(0).shape)
             tc_dim = torch.nn.functional.grid_sample(
                 self.time_channels[img].unsqueeze(0),
                 pixels[img].unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
             times.append(tc_dim)
-            print("tc_dim ", tc_dim.shape)
 
         feats = torch.stack(feats).squeeze(1)
         times = torch.stack(times).squeeze(1)
@@ -182,9 +177,9 @@ class ImagePlanes(torch.nn.Module):
 
         feats = torch.cat((feats[0], times[0], pixels), 1)
 
-        time_channel = self.time_channels
+        # time_channel = self.time_channels
 
-        return feats, time_channel
+        return feats
     
     
 class LLFFImagePlanes(torch.nn.Module):
@@ -284,8 +279,8 @@ class MultiImageNeRF(torch.nn.Module):
     def forward(self, x, ts):
         print("Calling now", x.shape)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
-        x, time_channel = self.image_plane(input_pts)
-        return self.render_network(x, input_views, time_channel), torch.zeros_like(input_pts[:, :3])
+        x = self.image_plane(input_pts)
+        return self.render_network(x, input_views), torch.zeros_like(input_pts[:, :3])
 
 class EmbeddedMultiImageNeRF(torch.nn.Module):
     
