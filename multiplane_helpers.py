@@ -121,7 +121,7 @@ class ImagePlanes(torch.nn.Module):
             M = M[0:3]
             self.pose_matrices.append(M) 
 
-            image = images[i]
+            image = images[i][:, :, :-1]
             image = torch.from_numpy(image)
             self.images.append(image.permute(2, 0, 1))
             self.size = float(image.shape[0])
