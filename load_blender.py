@@ -63,18 +63,8 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
             # create channel
             cur_time = frame['time'] if 'time' in frame else float(t) / (len(meta['frames'][::skip]) - 1)
             time_channel = np.full_like(img[:, :, 0], cur_time, dtype=np.float32)  # Assuming img is (H, W, 4) for RGBA
-            # print("time channel", time_channel)
 
-            #embedder time channel (args.multires = 10)
-            # print("Before", time_channel)
-            # embed_fn, out_dim = get_embedder(10, 1)
-            # embedded_time_channel = embed_fn(time_channel)
-            # print("After", embedded_time_channel)
-
-            # add channel to img
-            # img_with_time = np.dstack((img, time_channel[:, :, np.newaxis]))
             img_with_time = np.dstack((img, time_channel))
-            # print("image with time", img_with_time)
             imgs.append(img_with_time)
             poses.append(np.array(frame['transform_matrix']))
             times.append(cur_time)
@@ -82,9 +72,7 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         assert times[0] == 0, "Time must start at 0"
 
         imgs = np.array(imgs).astype(np.float32)  # keep all 5 channels (RGBA)
-        # print("Before div", imgs[:, 400, 400, :4], "!!!!!!!")
         imgs[:, :, :, :4] = imgs[:, :, :, :4] / 255.
-        # print("After div", imgs[:, 400, 400, :4], "?????????")
         poses = np.array(poses).astype(np.float32)
         times = np.array(times).astype(np.float32)
         counts.append(counts[-1] + imgs.shape[0])

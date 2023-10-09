@@ -1,4 +1,4 @@
-expname = dnerf_change_multiplane_helpers
+expname = dnerf_try_with_embedding
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -12,6 +12,9 @@ lrate_decay = 500
 N_samples = 64
 N_importance = 128
 N_rand = 1024
+
+mi_count=150
+i_testset=100
 
 precrop_iters = 500
 precrop_frac = 0.5
