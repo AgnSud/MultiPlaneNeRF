@@ -1,4 +1,5 @@
 import torch
+from run_nerf_helpers import *
 
 class RenderNetwork(torch.nn.Module):
     def __init__(
@@ -130,8 +131,13 @@ class ImagePlanes(torch.nn.Module):
             self.K_matrices.append(K)
 
             time_channel = images[i][:, :, -1:]  # Time channel, the last column
-            time_channel = torch.from_numpy(time_channel)
-            self.time_channels.append(time_channel.permute(2, 0, 1))
+            embedtime_fn, input_ch_time = get_embedder(10, 1)  # get embedder, arguments from run_nerf, create_mi_nerf, except of last argument
+            time_channel = torch.from_numpy(time_channel).to(device)
+            embed_time_channel = embedtime_fn(time_channel)
+            embed_time_channel_mean = torch.mean(embed_time_channel, dim=2, keepdim=True)
+
+
+            self.time_channels.append(embed_time_channel_mean.permute(2, 0, 1))
 
         self.pose_matrices = torch.stack(self.pose_matrices).to(device)
         self.K_matrices = torch.stack(self.K_matrices).to(device)
@@ -278,7 +284,7 @@ class MultiImageNeRF(torch.nn.Module):
         return self.render_network.parameters()
         
     def forward(self, x, ts):
-        print("Calling now", x.shape)
+        # print("Calling now", x.shape)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         x = self.image_plane(input_pts)
         return self.render_network(x, input_views), torch.zeros_like(input_pts[:, :3])

@@ -660,7 +660,7 @@ def config_parser():
     parser.add_argument("--divide_fac",   type=int, default=1, 
                         help='divide img size by this number')
     
-    parser.add_argument("--mi_count",   type=int, default=100, 
+    parser.add_argument("--mi_count",   type=int, default=100, #before: default=100
                         help='mi count')
 
     return parser
@@ -710,15 +710,13 @@ def train():
         near = 2.
         far = 6.
 
-        # print("Before", images[15])
+
         if args.white_bkgd:
-            # images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
             fifth_channel = images[..., -1:]
             rgb_channels = images[..., :3] * images[..., 3:4] + (1. - images[..., 3:4])
             images = np.concatenate((rgb_channels, fifth_channel), axis=3)
         else:
             images = np.delete(images, 3, axis=3)  # only RGB channels + time channel
-        # print("After", images[15])
 
     elif args.dataset_type == 'LINEMOD':
         images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(args.datadir, args.half_res, args.testskip)
