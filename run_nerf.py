@@ -305,7 +305,7 @@ def create_mi_nerf(plane, args):
     """Instantiate NeRF's MLP model.
     """
     embed_fn, input_ch = get_embedder(args.multires, 3, -1)
-    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, -1)
+    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, args.i_embed)
 
     input_ch_views = 0
     embeddirs_fn = None
