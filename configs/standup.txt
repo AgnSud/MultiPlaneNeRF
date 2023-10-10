@@ -1,4 +1,4 @@
-expname = dnerf_try_with_embedding
+expname = dnerf_change_embedding
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -10,12 +10,12 @@ white_bkgd = True
 lrate_decay = 500
 
 N_samples = 32
-N_importance = 64
-N_rand = 128
+N_importance = 128
+N_rand = 256
 
 mi_count = 150
 i_testset = 250
-N_iter = 200000
+N_iter = 100000
 
 precrop_iters = 500
 precrop_frac = 0.5
