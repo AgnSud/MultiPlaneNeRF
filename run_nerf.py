@@ -193,19 +193,6 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
     rgbs = np.stack(rgbs, 0)
     
     print(type(gt_imgs))
-    # ssim_f = StructuralSimilarityIndexMeasure().to('cpu')
-    # img_ssim = ssim_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
-    #
-    # lpips_f = LearnedPerceptualImagePatchSimilarity(net_type='vgg').to('cpu')
-    # img_lpips = lpips_f(torch.permute(torch.from_numpy(rgbs), (0, 3, 1, 2)), torch.permute(torch.from_numpy(gt_imgs), (0, 3, 1, 2)))
-    #
-    # rgbss = np.array(rgbs)
-    # gts = np.array(gt_imgs)
-    #
-    # p = -10. * np.log10(np.mean(np.square(rgbss - gts)))
-    # print(" CALCULATED PSNR FOR TESTSET")
-    # with open(os.path.join(savedir, 'result.txt'), 'w') as f:
-    #     f.write(f"psnr: {p}\nssim: {img_ssim}\nlpips: {img_lpips}")
         
     disps = np.stack(disps, 0)
     return rgbs, disps

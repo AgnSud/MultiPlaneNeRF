@@ -9,13 +9,15 @@ use_viewdirs = True
 white_bkgd = True
 lrate_decay = 500
 
-N_samples = 32
-N_importance = 128
-N_rand = 256
+N_samples = 16
+N_importance = 32
+N_rand = 128
 
 mi_count = 150
 i_testset = 250
 N_iter = 100000
+
+testskip = 8
 
 precrop_iters = 500
 precrop_frac = 0.5
