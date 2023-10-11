@@ -8,7 +8,7 @@ class RenderNetwork(torch.nn.Module):
         dir_count
     ):
         super().__init__()
-        self.input_size = 4*input_size + input_size*2
+        self.input_size = 3*input_size + 21*input_size + input_size*2
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
               torch.nn.Linear(self.input_size, 256),
@@ -137,7 +137,7 @@ class ImagePlanes(torch.nn.Module):
             embed_time_channel_mean = torch.mean(embed_time_channel, dim=2, keepdim=True)
 
 
-            self.time_channels.append(embed_time_channel_mean.permute(2, 0, 1))
+            self.time_channels.append(embed_time_channel.permute(2, 0, 1))
 
         self.pose_matrices = torch.stack(self.pose_matrices).to(device)
         self.K_matrices = torch.stack(self.K_matrices).to(device)
