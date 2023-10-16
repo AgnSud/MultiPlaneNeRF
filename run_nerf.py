@@ -62,6 +62,7 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         input_frame_time = frame_time[:, None].expand([B, N, 1])
         input_frame_time_flat = torch.reshape(input_frame_time, [-1, 1])
         embedded_time = embedtime_fn(input_frame_time_flat)
+        # embedded_times = [embedded_time, frame_time]
         embedded_times = [embedded_time, embedded_time]
 
     else:
@@ -74,7 +75,8 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         embedded_dirs = embeddirs_fn(input_dirs_flat)
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
-    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times)
+    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times) #[tensor, time]
+    # outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, frame_time) #only number with time, check
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
     position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
     return outputs, position_delta
@@ -292,7 +294,7 @@ def create_mi_nerf(plane, args):
     """Instantiate NeRF's MLP model.
     """
     embed_fn, input_ch = get_embedder(args.multires, 3, -1)
-    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, args.i_embed)
+    embedtime_fn, input_ch_time = get_embedder(args.multires, 1, -1)
 
     input_ch_views = 0
     embeddirs_fn = None
@@ -772,7 +774,7 @@ def train():
     print("images: ", args.mi_count)
     print(images[0])
     if args.dataset_type != 'llff':
-        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(ImagePlanes(focal, poses, images, args.mi_count), args) #create_nerf(args)
+        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(ImagePlanes(focal, poses, images, times, args.mi_count), args) #create_nerf(args)
     else:
         render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(LLFFImagePlanes(hwf, poses, images, args.mi_count), args)
         
