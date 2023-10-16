@@ -9,7 +9,7 @@ class RenderNetwork(torch.nn.Module):
             dir_count
     ):
         super().__init__()
-        self.input_size = 3 * input_size + 1 * input_size + input_size * 2 + 1
+        self.input_size = 3 * input_size + 3 * input_size + input_size * 2 + 25
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
             torch.nn.Linear(self.input_size, 256),
@@ -43,7 +43,7 @@ class RenderNetwork(torch.nn.Module):
         )
 
         self.layers_rgb = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size + dir_count + 1, 256),
+            torch.nn.Linear(256 + self.input_size + dir_count + 25, 256),
             torch.nn.ReLU(),
             torch.nn.Linear(256, 256),
             torch.nn.ReLU(),
@@ -126,6 +126,9 @@ class ImagePlanes(torch.nn.Module):
 
             # image = images[i][:, :, :-1]
             image = images[i]
+            last_channel = images[i][:, :, -1:]
+            last_channel_expanded = np.repeat(last_channel, 2, axis=2)
+            image = np.concatenate((image, last_channel_expanded), axis=2)
             image = torch.from_numpy(image)
             self.images.append(image.permute(2, 0, 1))
             self.size = float(image.shape[0])
@@ -168,7 +171,7 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels * 2.0 - 1.0
         pixels = pixels.permute(0,2,1)
 
-        ts_time = ts[0].item()
+        ts_time = ts[0][0].item()
         ts_time_id = torch.where(self.time_channels == ts_time)[0].item()
 
         feats = []
@@ -332,8 +335,9 @@ class MultiImageNeRF(torch.nn.Module):
         # print("Calling now", x.shape)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         # input_pts_with_time = torch.cat([input_pts, ts[0]], dim=1)
-        x = self.image_plane(input_pts, ts[0])
-        return self.render_network(x, input_views, ts[0]), torch.zeros_like(input_pts[:, :3])
+        ts_more_channels = ts[0].expand(-1, 25)
+        x = self.image_plane(input_pts, ts_more_channels)
+        return self.render_network(x, input_views, ts_more_channels), torch.zeros_like(input_pts[:, :3])
 
 class EmbeddedMultiImageNeRF(torch.nn.Module):
     

@@ -1,4 +1,4 @@
-expname = dnerf_time_stays_in_image_weights_in_forward
+expname = dnerf_time_stays_in_image_weights_in_forward_more_time_channels
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -10,11 +10,11 @@ white_bkgd = True
 lrate_decay = 500
 
 N_samples = 16
-N_importance = 32
-N_rand = 128
+N_importance = 64
+N_rand = 512
 
 mi_count = 150
-i_testset = 250
+i_testset = 2500
 N_iter = 50000
 
 testskip = 8
