@@ -1,4 +1,4 @@
-expname = dnerf_more_channels
+expname = dnerf_time_stays_in_image_weights_in_forward
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -15,7 +15,7 @@ N_rand = 128
 
 mi_count = 150
 i_testset = 250
-N_iter = 100000
+N_iter = 50000
 
 testskip = 8
 
