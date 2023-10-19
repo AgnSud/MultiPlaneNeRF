@@ -15,9 +15,7 @@ N_rand = 512
 
 mi_count = 150
 i_testset = 2500
-N_iter = 50000
-
-testskip = 8
+N_iter = 100000
 
 precrop_iters = 500
 precrop_frac = 0.5
