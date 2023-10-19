@@ -172,7 +172,6 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels.permute(0,2,1)
 
         ts_time = ts[0][0].item()
-        ts_time_id = torch.where(self.time_channels == ts_time)[0].item()
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
