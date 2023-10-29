@@ -48,13 +48,14 @@ def get_embedder(multires, input_dims, i=0):
     if i == -1:
         return nn.Identity(), input_dims
 
+    
     embed_kwargs = {
-        'include_input': True,
-        'input_dims': input_dims,
-        'max_freq_log2': multires - 1,
-        'num_freqs': multires,
-        'log_sampling': True,
-        'periodic_fns': [torch.sin, torch.cos],
+                'include_input' : True,
+                'input_dims' : input_dims,
+                'max_freq_log2' : multires-1,
+                'num_freqs' : multires,
+                'log_sampling' : True,
+                'periodic_fns' : [torch.sin, torch.cos],
     }
 
     embedder_obj = Embedder(**embed_kwargs)
@@ -66,7 +67,8 @@ def get_embedder(multires, input_dims, i=0):
 class NeRF(nn.Module):
     def __init__(self, D=8, W=256, input_ch=3, input_ch_views=3, input_ch_time=1, output_ch=4, skips=[4],
                  use_viewdirs=False):
-        """
+
+        """ 
         """
         super(NeRF, self).__init__()
         self.D = D

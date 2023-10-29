@@ -50,11 +50,12 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         imgs = []
         poses = []
         times = []
-        if s == 'train' or testskip == 0:
+
+        if s=='train' or testskip==0:
             skip = 1
         else:
             skip = testskip
-
+            
         for t, frame in enumerate(meta['frames'][::skip]):
             fname = os.path.join(basedir, frame['file_path'] + '.png')
             img = imageio.imread(fname)
@@ -79,17 +80,18 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         all_poses.append(poses)
         all_times.append(times)
 
-    i_split = [np.arange(counts[i], counts[i + 1]) for i in range(3)]
-
+    
+    i_split = [np.arange(counts[i], counts[i+1]) for i in range(3)]
+    
     imgs = np.concatenate(all_imgs, 0)
     poses = np.concatenate(all_poses, 0)
     times = np.concatenate(all_times, 0)
-
+    
     H, W = imgs[0].shape[:2]
     camera_angle_x = float(meta['camera_angle_x'])
     focal = .5 * W / np.tan(.5 * camera_angle_x)
-
-    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180, 180, 40 + 1)[:-1]], 0)
+    
+    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
     render_times = torch.linspace(0., 1., render_poses.shape[0])
 
     if divide_fac != 1:

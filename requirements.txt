@@ -1,8 +1,9 @@
-torch==2.0.0
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==2.0.0+cu117
+torchvision>=0.9.1+cu117
 numpy
 torchmetrics
 pandas
-torchvision>=0.9.1
 imageio
 imageio-ffmpeg
 matplotlib

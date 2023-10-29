@@ -39,15 +39,15 @@ def batchify(fn, chunk):
         out_list = []
         dx_list = []
         for i in range(0, num_batches, chunk):
-            out, dx = fn(inputs_pos[i:i + chunk], [inputs_time[0][i:i + chunk], inputs_time[1][i:i + chunk]])
+
+            out, dx = fn(inputs_pos[i:i+chunk], [inputs_time[0][i:i+chunk], inputs_time[1][i:i+chunk]])
             out_list += [out]
             dx_list += [dx]
         return torch.cat(out_list, 0), torch.cat(dx_list, 0)
-
     return ret
 
 
-def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedtime_fn, netchunk=1024 * 64,
+def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedtime_fn, netchunk=1024*64,
                 embd_time_discr=True):
     """Prepares inputs and applies network 'fn'.
     """
@@ -76,7 +76,8 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         embedded_dirs = embeddirs_fn(input_dirs_flat)
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
-    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times)  # [tensor, time]
+
+    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times) #[tensor, time]
     # outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, frame_time) #only number with time, check
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
     position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
@@ -98,10 +99,11 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
     return all_ret
 
 
-def render(H, W, K, chunk=1024 * 32, rays=None, c2w=None, ndc=True,
-           near=0., far=1., frame_time=None,
-           use_viewdirs=False, c2w_staticcam=None,
-           **kwargs):
+
+def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
+                  near=0., far=1., frame_time=None,
+                  use_viewdirs=False, c2w_staticcam=None,
+                  **kwargs):
     """Render rays
     Args:
       H: int. Height of image in pixels.
@@ -149,7 +151,8 @@ def render(H, W, K, chunk=1024 * 32, rays=None, c2w=None, ndc=True,
     rays_o = torch.reshape(rays_o, [-1, 3]).float()
     rays_d = torch.reshape(rays_d, [-1, 3]).float()
 
-    near, far = near * torch.ones_like(rays_d[..., :1]), far * torch.ones_like(rays_d[..., :1])
+
+    near, far = near * torch.ones_like(rays_d[...,:1]), far * torch.ones_like(rays_d[...,:1])
     frame_time = frame_time * torch.ones_like(rays_d[..., :1])
     rays = torch.cat([rays_o, rays_d, near, far, frame_time], -1)
     # rays = torch.cat([rays_o, rays_d, near, far], -1)
@@ -184,7 +187,8 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
     for i, (c2w, frame_time) in enumerate(zip(tqdm(render_poses), render_times)):
         print(i, time.time() - t)
         t = time.time()
-        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3, :4], frame_time=frame_time, **render_kwargs)
+
+        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], frame_time=frame_time, **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
 
@@ -229,11 +233,12 @@ def create_nerf(args):
                           use_viewdirs=args.use_viewdirs).to(device)
         grad_vars += list(model_fine.parameters())
 
-    network_query_fn = lambda inputs, viewdirs, ts, network_fn: run_network(inputs, viewdirs, ts, network_fn,
-                                                                            embed_fn=embed_fn,
-                                                                            embeddirs_fn=embeddirs_fn,
-                                                                            embedtime_fn=embedtime_fn,
-                                                                            netchunk=args.netchunk)
+
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
+                                                                embed_fn=embed_fn,
+                                                                embeddirs_fn=embeddirs_fn,
+                                                                embedtime_fn=embedtime_fn,
+                                                                netchunk=args.netchunk)
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -314,11 +319,13 @@ def create_mi_nerf(plane, args):
         model_fine = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
         grad_vars += list(model_fine.parameters())
 
-    network_query_fn = lambda inputs, viewdirs, ts, network_fn: run_network(inputs, viewdirs, ts, network_fn,
-                                                                            embed_fn=embed_fn,
-                                                                            embeddirs_fn=embeddirs_fn,
-                                                                            embedtime_fn=embedtime_fn,
-                                                                            netchunk=args.netchunk)
+
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
+                                                                embed_fn=embed_fn,
+                                                                embeddirs_fn=embeddirs_fn,
+                                                                embedtime_fn=embedtime_fn,
+                                                                netchunk=args.netchunk)
+
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -467,10 +474,11 @@ def render_rays(ray_batch,
         sample.
     """
     N_rays = ray_batch.shape[0]
-    rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
-    viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
-    bounds = torch.reshape(ray_batch[..., 6:9], [-1, 1, 3])
-    near, far, frame_time = bounds[..., 0], bounds[..., 1], bounds[..., 2]  # [-1,1]
+
+    rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
+    viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
+    bounds = torch.reshape(ray_batch[...,6:9], [-1,1,3])
+    near, far, frame_time = bounds[...,0], bounds[...,1], bounds[...,2] # [-1,1]
 
     t_vals = torch.linspace(0., 1., steps=N_samples)
     if not lindisp:
@@ -498,10 +506,11 @@ def render_rays(ray_batch,
 
     pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]  # [N_rays, N_samples, 3]
 
-    #     raw = run_network(pts)
+
+
+#     raw = run_network(pts)
     raw, position_delta = network_query_fn(pts, viewdirs, frame_time, network_fn)
-    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd,
-                                                                 pytest=pytest)
+    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
     if N_importance > 0:
         rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
@@ -515,7 +524,9 @@ def render_rays(ray_batch,
                                                             None]  # [N_rays, N_samples + N_importance, 3]
 
         run_fn = network_fn if network_fine is None else network_fine
-        #         raw = run_network(pts, fn=run_fn)
+
+#         raw = run_network(pts, fn=run_fn)
+
         raw, position_delta = network_query_fn(pts, viewdirs, frame_time, run_fn)
 
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd,
@@ -552,7 +563,8 @@ def config_parser():
     # training options
     parser.add_argument("--N_iter", type=int, default=500000,
                         help='num training iterations')
-    parser.add_argument("--netdepth", type=int, default=8,
+
+    parser.add_argument("--netdepth", type=int, default=8, 
                         help='layers in network')
     parser.add_argument("--netwidth", type=int, default=256,
                         help='channels per layer')
@@ -652,7 +664,8 @@ def config_parser():
     parser.add_argument("--divide_fac", type=int, default=1,
                         help='divide img size by this number')
 
-    parser.add_argument("--mi_count", type=int, default=100,  # before: default=100
+    
+    parser.add_argument("--mi_count",   type=int, default=100, #before: default=100
                         help='mi count')
 
     return parser
@@ -693,15 +706,15 @@ def train():
         print('NEAR FAR', near, far)
 
     elif args.dataset_type == 'blender':
-        images, poses, times, render_poses, render_times, hwf, i_split = load_blender_data(args.datadir,
-                                                                                           args.divide_fac,
-                                                                                           args.testskip)
+
+        images, poses, times, render_poses, render_times, hwf, i_split = load_blender_data(args.datadir, args.divide_fac, args.testskip)
         print('Loaded blender', images.shape, render_poses.shape, hwf, args.datadir)
         print(i_split)
         i_train, i_val, i_test = i_split
 
         near = 2.
         far = 6.
+
 
         if args.white_bkgd:
             fifth_channel = images[..., -1:]
@@ -778,8 +791,8 @@ def train():
     print("images: ", args.mi_count)
     print(images[0])
     if args.dataset_type != 'llff':
-        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(
-            ImagePlanes(focal, poses, images, times, args.mi_count), args)  # create_nerf(args)
+
+        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(ImagePlanes(focal, poses, images, times, args.mi_count), args) #create_nerf(args)
     else:
         render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(
             LLFFImagePlanes(hwf, poses, images, args.mi_count), args)
@@ -849,6 +862,7 @@ def train():
     if use_batching:
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
+
     N_iters = args.N_iter + 1
     print('Begin')
     print('TRAIN views are', i_train)
@@ -916,8 +930,8 @@ def train():
 
         #####  Core optimization loop  #####
         rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, rays=batch_rays, frame_time=frame_time,
-                                        verbose=i < 10, retraw=True,
-                                        **render_kwargs_train)
+                                                verbose=i < 10, retraw=True,
+                                                **render_kwargs_train)
 
         optimizer.zero_grad()
         # print("RGB ", rgb)
@@ -970,11 +984,11 @@ def train():
                 }, path)
                 print('Saved checkpoints at', path)
 
-        if (i % args.i_video == 0 and i > 0):
+
+        if (i%args.i_video==0 and i > 0):
             # Turn on testing mode
             with torch.no_grad():
-                rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test,
-                                          gt_imgs=images[i_test])
+                rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
             print('Done, saving', rgbs.shape, disps.shape)
             moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
@@ -985,8 +999,8 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
-                render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
-                            args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+
+                render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
         if i % args.i_print == 0:

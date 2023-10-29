@@ -45,6 +45,7 @@ class RenderNetwork(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Linear(256, 256),
             torch.nn.ReLU(),
+
         )
 
         self.layers_sigma = torch.nn.Sequential(
@@ -185,6 +186,7 @@ class ImagePlanes(torch.nn.Module):
         self.time_channels = torch.reshape(self.time_channels, (count, 1))
         print(self.time_channels.shape)
 
+
     def forward(self, points=None, ts=None):
         if points.shape[0] == 1:
             points = points[0]
@@ -197,6 +199,8 @@ class ImagePlanes(torch.nn.Module):
         pixels = torch.clamp(pixels, 0, 1)
         pixels = pixels * 2.0 - 1.0
         pixels = pixels.permute(0, 2, 1)
+
+        ts_time = ts[0][0].item()
 
         ts_time = ts[0][0].item()
 

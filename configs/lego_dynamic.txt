@@ -1,6 +1,6 @@
-expname = dnerf_lego_4_try
+expname = dnerf_lego_tuning
 basedir = ./logs
-datadir = ./data/lego
+datadir = ./data/lego_dynamic
 dataset_type = blender
 
 no_batching = True
@@ -23,4 +23,4 @@ i_video = 100000
 precrop_iters = 500
 precrop_frac = 0.5
 
-half_res = True
+half_res = False

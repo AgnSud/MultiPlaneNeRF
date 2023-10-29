@@ -1,4 +1,5 @@
 expname = lego
+
 basedir = ./logs
 datadir = ./data/lego
 dataset_type = blender
@@ -18,8 +19,12 @@ N_importance = 128
 N_rand = 500
 testskip = 1
 
+
+mi_count = 50
+i_testset = 2500
+N_iter = 100000
+
 precrop_iters = 500
-precrop_iters_time = 10000
 precrop_frac = 0.5
 
 half_res = True
