@@ -78,7 +78,6 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
 
 
     outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times) #[tensor, time]
-    # outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, frame_time) #only number with time, check
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
     position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
     return outputs, position_delta
@@ -904,7 +903,6 @@ def train():
                 max_sample = max(int(skip_factor), 3)
                 img_i = np.random.choice(i_train[:max_sample])
 
-            # img_i = np.random.choice(i_train)
             target = images[img_i]
             target = target[:, :, :-1]
             target = torch.Tensor(target).to(device)
@@ -943,8 +941,6 @@ def train():
                                                 **render_kwargs_train)
 
         optimizer.zero_grad()
-        # print("RGB ", rgb)
-        # print("target ", target_s)
         img_loss = img2mse(rgb, target_s)
         trans = extras['raw'][..., -1]
         loss = img_loss
@@ -1008,7 +1004,6 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
-
                 render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 

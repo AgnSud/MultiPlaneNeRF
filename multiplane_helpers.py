@@ -202,8 +202,6 @@ class ImagePlanes(torch.nn.Module):
 
         ts_time = ts[0][0].item()
 
-        ts_time = ts[0][0].item()
-
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
             time1 = (self.time_channels[img] - ts_time).abs().item()
@@ -247,22 +245,6 @@ class ImagePlanes(torch.nn.Module):
         feats = feats.flatten(2)
 
         feats = torch.cat((feats[0], pixels, ts), 1)
-
-        # time = ts[0].item()
-        # time_id = torch.where(self.time_channels == time)[0].item()
-        # pixels_at_exact_time = pixels[time_id]
-        #
-        # feat = torch.nn.functional.grid_sample(
-        #     self.image_plane[time_id].unsqueeze(0),
-        #     pixels_at_exact_time.unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
-        # feats.append(feat)
-        #
-        # feats = torch.stack(feats).squeeze(1)
-        #
-        # feats = feats.permute(2, 3, 0, 1)
-        # feats = feats.flatten(2)
-        #
-        # feats = torch.cat((feats[0], pixels_at_exact_time, ts), 1)
 
         return feats
 
@@ -363,9 +345,7 @@ class MultiImageNeRF(torch.nn.Module):
         return self.render_network.parameters()
 
     def forward(self, x, ts):
-        # print("Calling now", x.shape)
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
-        # input_pts_with_time = torch.cat([input_pts, ts[0]], dim=1)
         ts_more_channels = ts[0].expand(-1, 25)
         x = self.image_plane(input_pts, ts_more_channels)
         return self.render_network(x, input_views, ts_more_channels), torch.zeros_like(input_pts[:, :3])
