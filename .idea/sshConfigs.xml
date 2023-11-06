@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig authType="PASSWORD" host="gw.gmum" id="144a1203-39fb-4d3f-a285-1d2b381072fe" port="22" nameFormat="DESCRIPTIVE" username="z1175374" useOpenSSHConfig="true" />
+    </configs>
+  </component>
+</project>
