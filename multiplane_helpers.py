@@ -165,11 +165,11 @@ class ImagePlanes(torch.nn.Module):
         ''' ts to jest konkretna chwila czasowa '''
         points = torch.concat([points, torch.ones(points.shape[0], 1).to(points.device)], 1).to(points.device)
         ps = self.K_matrices @ self.pose_matrices @ points.T
-        pixels = (ps/ps[:,None,2])[:,0:2,:]
+        pixels = (ps / ps[:, None, 2])[:, 0:2, :]
         pixels = pixels / self.size
         pixels = torch.clamp(pixels, 0, 1)
         pixels = pixels * 2.0 - 1.0
-        pixels = pixels.permute(0,2,1)
+        pixels = pixels.permute(0, 2, 1)
 
         ts_time = ts[0][0].item()
 
@@ -216,22 +216,6 @@ class ImagePlanes(torch.nn.Module):
         feats = feats.flatten(2)
 
         feats = torch.cat((feats[0], pixels, ts), 1)
-
-        # time = ts[0].item()
-        # time_id = torch.where(self.time_channels == time)[0].item()
-        # pixels_at_exact_time = pixels[time_id]
-        #
-        # feat = torch.nn.functional.grid_sample(
-        #     self.image_plane[time_id].unsqueeze(0),
-        #     pixels_at_exact_time.unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
-        # feats.append(feat)
-        #
-        # feats = torch.stack(feats).squeeze(1)
-        #
-        # feats = feats.permute(2, 3, 0, 1)
-        # feats = feats.flatten(2)
-        #
-        # feats = torch.cat((feats[0], pixels_at_exact_time, ts), 1)
 
         return feats
     

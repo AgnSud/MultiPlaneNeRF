@@ -602,6 +602,8 @@ def config_parser():
     # training options
     parser.add_argument("--precrop_iters", type=int, default=0,
                         help='number of steps to train on central crops')
+    parser.add_argument("--precrop_iters_time", type=int, default=0,
+                        help='number of steps to train on central time')
     parser.add_argument("--precrop_frac", type=float,
                         default=.5, help='fraction of img taken for central crops') 
 
@@ -875,7 +877,14 @@ def train():
 
         else:
             # Random from one image
-            img_i = np.random.choice(i_train)
+            if i >= args.precrop_iters_time:
+                img_i = np.random.choice(i_train)
+            else:
+                skip_factor = i / float(args.precrop_iters_time) * len(i_train)
+                max_sample = max(int(skip_factor), 3)
+                img_i = np.random.choice(i_train[:max_sample])
+
+            # img_i = np.random.choice(i_train)
             target = images[img_i]
             target = target[:, :, :-1]
             target = torch.Tensor(target).to(device)
