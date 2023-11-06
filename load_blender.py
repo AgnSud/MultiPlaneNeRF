@@ -1,37 +1,36 @@
 import os
 import torch
 import numpy as np
-import imageio 
+import imageio
 import json
 import torch.nn.functional as F
 import cv2
 from run_nerf_helpers import *
 
+trans_t = lambda t: torch.Tensor([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, t],
+    [0, 0, 0, 1]]).float()
 
-trans_t = lambda t : torch.Tensor([
-    [1,0,0,0],
-    [0,1,0,0],
-    [0,0,1,t],
-    [0,0,0,1]]).float()
+rot_phi = lambda phi: torch.Tensor([
+    [1, 0, 0, 0],
+    [0, np.cos(phi), -np.sin(phi), 0],
+    [0, np.sin(phi), np.cos(phi), 0],
+    [0, 0, 0, 1]]).float()
 
-rot_phi = lambda phi : torch.Tensor([
-    [1,0,0,0],
-    [0,np.cos(phi),-np.sin(phi),0],
-    [0,np.sin(phi), np.cos(phi),0],
-    [0,0,0,1]]).float()
-
-rot_theta = lambda th : torch.Tensor([
-    [np.cos(th),0,-np.sin(th),0],
-    [0,1,0,0],
-    [np.sin(th),0, np.cos(th),0],
-    [0,0,0,1]]).float()
+rot_theta = lambda th: torch.Tensor([
+    [np.cos(th), 0, -np.sin(th), 0],
+    [0, 1, 0, 0],
+    [np.sin(th), 0, np.cos(th), 0],
+    [0, 0, 0, 1]]).float()
 
 
 def pose_spherical(theta, phi, radius):
     c2w = trans_t(radius)
-    c2w = rot_phi(phi/180.*np.pi) @ c2w
-    c2w = rot_theta(theta/180.*np.pi) @ c2w
-    c2w = torch.Tensor(np.array([[-1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]])) @ c2w
+    c2w = rot_phi(phi / 180. * np.pi) @ c2w
+    c2w = rot_theta(theta / 180. * np.pi) @ c2w
+    c2w = torch.Tensor(np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]])) @ c2w
     return c2w
 
 
@@ -51,6 +50,7 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         imgs = []
         poses = []
         times = []
+
         if s=='train' or testskip==0:
             skip = 1
         else:
@@ -79,6 +79,7 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         all_imgs.append(imgs)
         all_poses.append(poses)
         all_times.append(times)
+
     
     i_split = [np.arange(counts[i], counts[i+1]) for i in range(3)]
     
@@ -94,9 +95,9 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
     render_times = torch.linspace(0., 1., render_poses.shape[0])
 
     if divide_fac != 1:
-        H = H//divide_fac
-        W = W//divide_fac
-        focal = focal/divide_fac
+        H = H // divide_fac
+        W = W // divide_fac
+        focal = focal / divide_fac
 
         imgs_half_res = np.zeros((imgs.shape[0], H, W, 5))
         for i, img in enumerate(imgs):
@@ -106,5 +107,3 @@ def load_blender_data(basedir, divide_fac=1, testskip=1):
         imgs = imgs.astype(np.float32)
 
     return imgs, poses, times, render_poses, render_times, [H, W, focal], i_split
-
-

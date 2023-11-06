@@ -217,6 +217,22 @@ class ImagePlanes(torch.nn.Module):
 
         feats = torch.cat((feats[0], pixels, ts), 1)
 
+        # time = ts[0].item()
+        # time_id = torch.where(self.time_channels == time)[0].item()
+        # pixels_at_exact_time = pixels[time_id]
+        #
+        # feat = torch.nn.functional.grid_sample(
+        #     self.image_plane[time_id].unsqueeze(0),
+        #     pixels_at_exact_time.unsqueeze(0).unsqueeze(0), mode='bilinear', padding_mode='zeros', align_corners=False)
+        # feats.append(feat)
+        #
+        # feats = torch.stack(feats).squeeze(1)
+        #
+        # feats = feats.permute(2, 3, 0, 1)
+        # feats = feats.flatten(2)
+        #
+        # feats = torch.cat((feats[0], pixels_at_exact_time, ts), 1)
+
         return feats
     
     
