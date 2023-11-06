@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/MultiPlaneNeRF.iml" filepath="$PROJECT_DIR$/.idea/MultiPlaneNeRF.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/DynamicMultiPlaneNeRF.iml" filepath="$PROJECT_DIR$/.idea/DynamicMultiPlaneNeRF.iml" />
     </modules>
   </component>
 </project>
