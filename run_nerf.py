@@ -40,7 +40,7 @@ def batchify(fn, chunk):
         dx_list = []
         for i in range(0, num_batches, chunk):
 
-            out, dx = fn(inputs_pos[i:i+chunk], [inputs_time[0][i:i+chunk], inputs_time[1][i:i+chunk]])
+            out, dx = fn(inputs_pos[i:i+chunk], inputs_time[i:i+chunk])
             out_list += [out]
             dx_list += [dx]
         return torch.cat(out_list, 0), torch.cat(dx_list, 0)
@@ -63,7 +63,6 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         input_frame_time = frame_time[:, None].expand([B, N, 1])
         input_frame_time_flat = torch.reshape(input_frame_time, [-1, 1])
         embedded_time = embedtime_fn(input_frame_time_flat)
-        # embedded_times = [embedded_time, frame_time]
         embedded_times = [embedded_time, embedded_time]
 
     else:
@@ -77,7 +76,7 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
 
-    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_times) #[tensor, time]
+    outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_time)
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
     position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
     return outputs, position_delta

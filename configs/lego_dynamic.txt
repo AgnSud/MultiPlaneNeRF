@@ -1,4 +1,4 @@
-expname = dnerf_lego_interpolation_linear_add_third_frame
+expname = dnerf_lego_embed_time_mean__put_exact_time_to_feats_50__no_embed_exact_time
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender
@@ -14,7 +14,7 @@ N_importance = 128
 N_rand = 1024
 
 mi_count = 50
-i_testset = 5000
+i_testset = 2500
 N_iter = 100000
 
 precrop_iters = 500
