@@ -162,11 +162,11 @@ class ImagePlanes(torch.nn.Module):
             embedtime_fn, input_ch_time = get_embedder(10, 1)  # get embedder, arguments from run_nerf, create_mi_nerf, except of last argument
             last_channel = torch.from_numpy(last_channel).to(device)
             embed_last_channel = embedtime_fn(last_channel)
-            embed_last_channel_sum = torch.sum(embed_last_channel, dim=2, keepdim=True)
+            embed_last_channel_sum_and_scale = torch.sum(embed_last_channel, dim=2, keepdim=True) / input_ch_time
             # self.time_channels.append(embed_last_channel_mean.permute(2, 0, 1))
 
             # last_channel_expanded = np.repeat(last_channel, 2, axis=2)
-            image = np.concatenate((image, embed_last_channel_sum.cpu().numpy()), axis=2)
+            image = np.concatenate((image, embed_last_channel_sum_and_scale.cpu().numpy()), axis=2)
 
             image = torch.from_numpy(image)
             self.images.append(image.permute(2, 0, 1))
