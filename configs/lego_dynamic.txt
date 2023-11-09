@@ -1,4 +1,4 @@
-expname = dnerf_lego_embed_time_mean__put_exact_time_to_feats_50__no_embed_exact_time
+expname = dnerf_lego_embed_time_sum__put_exact_time_to_feats_50__no_embed_exact_time
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender

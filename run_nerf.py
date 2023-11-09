@@ -171,6 +171,8 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
 
 def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
     H, W, focal = hwf
+    parser = config_parser()
+    args = parser.parse_args()
 
     if render_factor != 0:
         # Render downsampled for speed
@@ -180,6 +182,7 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
 
     rgbs = []
     disps = []
+    rgbs_diff = []
 
     t = time.time()
     for i, (c2w, frame_time) in enumerate(zip(tqdm(render_poses), render_times)):
@@ -190,17 +193,25 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
 
+        img_diff = gt_imgs[i, :, :, :3] - rgb
+        rgbs_diff.append(img_diff.cpu().numpy())
+
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])
             filename = os.path.join(savedir, '{:03d}.png'.format(i))
             imageio.imwrite(filename, rgb8)
+
+            rgb_diff8 = to8b(rgbs_diff[-1])
+            filename_diff = os.path.join(savedir, '{:03d}_diff.png'.format(i))
+            imageio.imwrite(filename_diff, rgb_diff8)
 
     rgbs = np.stack(rgbs, 0)
 
     print(type(gt_imgs))
 
     disps = np.stack(disps, 0)
-    return rgbs, disps
+    rgbs_diff = np.stack(rgbs_diff, 0)
+    return rgbs, disps, rgbs_diff
 
 
 def create_nerf(args):
@@ -826,7 +837,7 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', render_poses.shape)
 
-            rgbs, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images,
+            rgbs, _, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images,
                                   savedir=testsavedir, render_factor=args.render_factor)
             print('Done rendering', testsavedir)
             imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=60, quality=8)
@@ -992,7 +1003,7 @@ def train():
         if (i%args.i_video==0 and i > 0):
             # Turn on testing mode
             with torch.no_grad():
-                rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
+                rgbs, disps, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
             print('Done, saving', rgbs.shape, disps.shape)
             moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
