@@ -193,10 +193,10 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
 
-        img_diff = gt_imgs[i, :, :, :3] - rgb
-        rgbs_diff.append(img_diff.cpu().numpy())
-
         if savedir is not None:
+            img_diff = gt_imgs[i, :, :, :3] - rgb
+            rgbs_diff.append(img_diff.cpu().numpy())
+
             rgb8 = to8b(rgbs[-1])
             filename = os.path.join(savedir, '{:03d}.png'.format(i))
             imageio.imwrite(filename, rgb8)
