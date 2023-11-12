@@ -204,13 +204,13 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
             rgb_diff8 = to8b(rgbs_diff[-1])
             filename_diff = os.path.join(savedir, '{:03d}_diff.png'.format(i))
             imageio.imwrite(filename_diff, rgb_diff8)
+            # rgbs_diff = np.stack(rgbs_diff, 0)
 
     rgbs = np.stack(rgbs, 0)
 
     print(type(gt_imgs))
 
     disps = np.stack(disps, 0)
-    rgbs_diff = np.stack(rgbs_diff, 0)
     return rgbs, disps, rgbs_diff
 
 
