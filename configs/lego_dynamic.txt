@@ -1,4 +1,4 @@
-expname = dnerf_lego_raise_precrop_iters_time
+expname = dnerf_lego_remove_time_before_inter_add_both_after_add_2ts_after
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender
@@ -14,11 +14,11 @@ N_importance = 128
 N_rand = 1024
 
 mi_count = 50
-i_testset = 2500
+i_testset = 5000
 N_iter = 100000
 
 precrop_iters = 500
-precrop_iters_time = 10000
+precrop_iters_time = 5000
 precrop_frac = 0.5
 
 half_res = False
