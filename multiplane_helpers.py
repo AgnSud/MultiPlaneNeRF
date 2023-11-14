@@ -203,24 +203,26 @@ class ImagePlanes(torch.nn.Module):
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
-            time1 = (self.time_channels[img] - ts_time).abs().item()
+            time1 = self.time_channels[img]
             time2 = time1
             if img != self.count - 1:
-                time2 = (self.time_channels[img + 1] - ts_time).abs().item()
+                time2 = self.time_channels[img + 1]
 
+            time1_diff = (time1 - ts_time).abs().item()
+            time2_diff = (time2 - ts_time).abs().item()
 
             # Interpolacja pomiędzy dwiema klatkami czasowymi
-            weight1 = 1.0 - time1
-            weight2 = 1.0 - time2
+            weight1 = 1.0 - time1_diff
+            weight2 = 1.0 - time2_diff
 
             # Dwa obrazy odpowiadające dwóm klatkom czasowym
             frame1 = self.image_plane[img][:3, :, :]
             frame2 = frame1
             times1 = self.image_plane[img][3:, 0, 0]
-            times2 = times1
+            # times2 = times1
             if img != self.count - 1:
                 frame2 = self.image_plane[img + 1][:3, :, :]
-                times2 = self.image_plane[img + 1][3:, 0, 0]
+                # times2 = self.image_plane[img + 1][3:, 0, 0]
 
             # Interpolacja między dwiema klatkami
             interpolated_frame = weight1 * frame1 + weight2 * frame2
@@ -241,8 +243,15 @@ class ImagePlanes(torch.nn.Module):
             # time_channel1 = time_channel1.expand(-1, -1, -1, feat.shape[-1])
             # time_channel2 = times2.unsqueeze(0).unsqueeze(2).unsqueeze(3)
             # time_channel2 = time_channel2.expand(-1, -1, -1, feat.shape[-1])
-            time_channel1 = time1 * torch.ones_like(feat[:, :1, :, :])
-            time_channel2 = time2 * torch.ones_like(feat[:, :1, :, :])
+            interpolated_time = weight1 * time1 + weight2 * time2
+            # if weight1 > 0 or weight2 > 0:
+            #     min_val = interpolated_time.min()
+            #     max_val = interpolated_time.max()
+            #     interpolated_time = (interpolated_time - min_val) / (max_val - min_val)
+
+            time_channel1 = (1.0 - time1_diff) * torch.ones_like(feat[:, :1, :, :])
+            time_channel2 = (1.0 - time2_diff) * torch.ones_like(feat[:, :1, :, :])
+            time_channel_inter = interpolated_time * torch.ones_like(feat[:, :1, :, :])
 
             feat = torch.cat((feat, time_channel1, time_channel2, ts), 1)
             feats.append(feat)

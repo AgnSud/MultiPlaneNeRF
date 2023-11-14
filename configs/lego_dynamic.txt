@@ -1,4 +1,4 @@
-expname = dnerf_lego_remove_time_before_inter_add_both_after_add_2ts_after
+expname = dnerf_lego_remove_time_before_inter__add_weights_after__add_2ts_after
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender
