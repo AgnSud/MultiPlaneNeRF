@@ -75,7 +75,6 @@ def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedt
         embedded_dirs = embeddirs_fn(input_dirs_flat)
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
-
     outputs_flat, position_delta_flat = batchify(fn, netchunk)(embedded, embedded_time)
     outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
     position_delta = torch.reshape(position_delta_flat, list(inputs.shape[:-1]) + [position_delta_flat.shape[-1]])
@@ -95,7 +94,6 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
 
     all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret}
     return all_ret
-
 
 
 def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
@@ -148,7 +146,6 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     # Create ray batch
     rays_o = torch.reshape(rays_o, [-1, 3]).float()
     rays_d = torch.reshape(rays_d, [-1, 3]).float()
-
 
     near, far = near * torch.ones_like(rays_d[...,:1]), far * torch.ones_like(rays_d[...,:1])
     frame_time = frame_time * torch.ones_like(rays_d[..., :1])

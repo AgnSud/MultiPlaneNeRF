@@ -14,50 +14,48 @@ class RenderNetwork(torch.nn.Module):
         self.input_size = 3 * input_size + 4 * input_size + input_size * 2 + time_count * 2
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
-            torch.nn.Linear(self.input_size, 256),
+            torch.nn.Linear(self.input_size, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
-            torch.nn.ReLU(),
-
+            torch.nn.Linear(512, 512),
+            torch.nn.ReLU()
         )
 
         self.layers_main_2 = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size + time_count * 2, 256),
+            torch.nn.Linear(512 + self.input_size + time_count, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
-            torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
-            torch.nn.ReLU(),
+            torch.nn.Linear(512, 512),
+            torch.nn.ReLU()
         )
-
         self.layers_main_3 = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size + time_count * 2, 256),
+            torch.nn.Linear(512 + self.input_size + time_count, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
-            torch.nn.ReLU(),
-            torch.nn.Linear(256, 256),
-            torch.nn.ReLU(),
+            torch.nn.Linear(512, 256),
+            torch.nn.ReLU()
 
         )
 
         self.layers_sigma = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size, 128),  # dodane wejscie tutaj moze cos pomoze
+            torch.nn.Linear(256 + self.input_size + time_count, 256),  # dodane wejscie tutaj moze cos pomoze
             torch.nn.ReLU(),
-            torch.nn.Linear(128, 1)
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Linear(256, 1)
         )
 
         self.layers_rgb = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size + dir_count + time_count * 2, 256),
+            torch.nn.Linear(256 + self.input_size + dir_count + time_count, 256),
             torch.nn.ReLU(),
             torch.nn.Linear(256, 256),
             torch.nn.ReLU(),
@@ -68,13 +66,13 @@ class RenderNetwork(torch.nn.Module):
         triplane_code = torch.concat([triplane_code, ts], dim=1)
         x = self.layers_main(triplane_code)
 
-        x1 = torch.concat([x, triplane_code, ts], dim=1)
-        x = self.layers_main_2(x1)
+        #x1 = torch.concat([x, triplane_code, ts], dim=1)
+        #x = self.layers_main_2(x1)
 
-        x2 = torch.concat([x, triplane_code, ts], dim=1)
-        x = self.layers_main_3(x2)
+        xs = torch.concat([x, triplane_code, ts], dim=1)
+        x = self.layers_main_3(xs)
 
-        xs = torch.concat([x, triplane_code], dim=1)
+        xs = torch.concat([x, triplane_code, ts], dim=1)
         sigma = self.layers_sigma(xs)
 
         x = torch.concat([x, triplane_code, dirs, ts], dim=1)
@@ -203,57 +201,21 @@ class ImagePlanes(torch.nn.Module):
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
-            time1 = self.time_channels[img]
-            time2 = time1
-            if img != self.count - 1:
-                time2 = self.time_channels[img + 1]
+            frame = self.image_plane[img][:3, :, :]
+            time_and_embed = self.image_plane[img][3:, 0, 0]
 
-            time1_diff = (time1 - ts_time).abs().item()
-            time2_diff = (time2 - ts_time).abs().item()
-
-            # Interpolacja pomiędzy dwiema klatkami czasowymi
-            weight1 = 1.0 - time1_diff
-            weight2 = 1.0 - time2_diff
-
-            # Dwa obrazy odpowiadające dwóm klatkom czasowym
-            frame1 = self.image_plane[img][:3, :, :]
-            frame2 = frame1
-            times1 = self.image_plane[img][3:, 0, 0]
-            # times2 = times1
-            if img != self.count - 1:
-                frame2 = self.image_plane[img + 1][:3, :, :]
-                # times2 = self.image_plane[img + 1][3:, 0, 0]
-
-            # Interpolacja między dwiema klatkami
-            interpolated_frame = weight1 * frame1 + weight2 * frame2
-            if weight1 > 0 or weight2 > 0:
-                min_val = interpolated_frame.min()
-                max_val = interpolated_frame.max()
-                interpolated_frame = (interpolated_frame - min_val) / (max_val - min_val)
-
-            # Przetwarzanie
             feat = F.grid_sample(
-                interpolated_frame.unsqueeze(0),
+                frame.unsqueeze(0),
                 pixels[img].unsqueeze(0).unsqueeze(0),
                 mode='bilinear',
                 padding_mode='zeros',
                 align_corners=False
             )
-            # time_channel1 = times1.unsqueeze(0).unsqueeze(2).unsqueeze(3)
-            # time_channel1 = time_channel1.expand(-1, -1, -1, feat.shape[-1])
-            # time_channel2 = times2.unsqueeze(0).unsqueeze(2).unsqueeze(3)
-            # time_channel2 = time_channel2.expand(-1, -1, -1, feat.shape[-1])
-            interpolated_time = weight1 * time1 + weight2 * time2
-            # if weight1 > 0 or weight2 > 0:
-            #     min_val = interpolated_time.min()
-            #     max_val = interpolated_time.max()
-            #     interpolated_time = (interpolated_time - min_val) / (max_val - min_val)
 
-            time_channel1 = (1.0 - time1_diff) * torch.ones_like(feat[:, :1, :, :])
-            time_channel2 = (1.0 - time2_diff) * torch.ones_like(feat[:, :1, :, :])
-            time_channel_inter = interpolated_time * torch.ones_like(feat[:, :1, :, :])
+            time_channel = time_and_embed.unsqueeze(0).unsqueeze(2).unsqueeze(3)
+            time_channel = time_channel.expand(-1, -1, -1, feat.shape[-1])
 
-            feat = torch.cat((feat, time_channel1, time_channel2, ts), 1)
+            feat = torch.cat((feat, time_channel, ts), 1)
             feats.append(feat)
 
         feats = torch.stack(feats).squeeze(1)
