@@ -165,6 +165,80 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     ret_dict = {k: all_ret[k] for k in all_ret if k not in k_extract}
     return ret_list + [ret_dict]
 
+def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
+    H, W, focal = hwf
+    parser = config_parser()
+    args = parser.parse_args()
+
+    if render_factor != 0:
+        # Render downsampled for speed
+        H = H // render_factor
+        W = W // render_factor
+        focal = focal / render_factor
+
+    rgbs = []
+    disps = []
+
+    t = time.time()
+
+    side_position = [
+                [
+                    -0.3842804431915283,
+                    -0.2877247631549835,
+                    0.8772359490394592,
+                    3.5362513065338135
+                ],
+                [
+                    0.9232164025306702,
+                    -0.11976281553506851,
+                    0.36514148116111755,
+                    1.4719324111938477
+                ],
+                [
+                    0.0,
+                    0.9501954317092896,
+                    0.3116547167301178,
+                    1.2563203573226929
+                ],
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ]
+            ]
+
+    side_render_times = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    side_poses = torch.tensor([side_position] * len(side_render_times)).cuda()
+    print("render_poses:")
+    print(render_poses)
+    print("side_poses:")
+    print(side_poses)
+
+    for i, (c2w, frame_time) in enumerate(zip(tqdm(side_poses), side_render_times)):
+        print(i, time.time() - t)
+        t = time.time()
+
+        print("CW:")
+        print(c2w)
+        print("time:")
+        print(frame_time)
+        print(i)
+
+        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3, :4], frame_time=frame_time, **render_kwargs)
+        rgbs.append(rgb.cpu().numpy())
+        disps.append(disp.cpu().numpy())
+
+        if savedir is not None:
+            rgb8 = to8b(rgbs[-1])
+            filename = os.path.join(savedir, '{:03d}_side.png'.format(i))
+            imageio.imwrite(filename, rgb8)
+
+    rgbs = np.stack(rgbs, 0)
+    disps = np.stack(disps, 0)
+    print(type(gt_imgs))
+    return rgbs, disps
+
 
 def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
     H, W, focal = hwf
@@ -204,11 +278,9 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
             # rgbs_diff = np.stack(rgbs_diff, 0)
 
     rgbs = np.stack(rgbs, 0)
-
-    print(type(gt_imgs))
-
     disps = np.stack(disps, 0)
-    return rgbs, disps, rgbs_diff
+    print(type(gt_imgs))
+    return rgbs, disps
 
 
 def create_nerf(args):
@@ -834,7 +906,7 @@ def train():
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', render_poses.shape)
 
-            rgbs, _, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images,
+            rgbs, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images,
                                   savedir=testsavedir, render_factor=args.render_factor)
             print('Done rendering', testsavedir)
             imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=60, quality=8)
@@ -958,7 +1030,8 @@ def train():
             loss = loss + img_loss0
             psnr0 = mse2psnr(img_loss0)
 
-        losses.append(loss.item())
+        if i > 500:
+            losses.append(loss.item())
 
         loss.backward()
         optimizer.step()
@@ -1000,27 +1073,40 @@ def train():
         if (i%args.i_video==0 and i > 0):
             # Turn on testing mode
             with torch.no_grad():
-                rgbs, disps, _ = render_path(render_poses, render_times, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test])
-            print('Done, saving', rgbs.shape, disps.shape)
+                rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk,
+                                          render_kwargs_test, gt_imgs=images[i_test])
+                rgbs_side, disps_side = side_render_path(render_poses, render_times, hwf, K, args.chunk,
+                                                         render_kwargs_test, gt_imgs=images[i_test])
+
+            print('Done, saving', rgbs.shape, disps.shape, rgbs_side.shape, disps_side.shape)
+
             moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
             imageio.mimwrite(moviebase + 'disp.mp4', to8b(disps / np.max(disps)), fps=30, quality=8)
+
+            moviebase_side = os.path.join(basedir, expname, '{}_spiral_side{:06d}_'.format(expname, i))
+            imageio.mimwrite(moviebase_side + 'rgb.mp4', to8b(rgbs_side), fps=30, quality=8)
+            imageio.mimwrite(moviebase_side + 'disp.mp4', to8b(disps_side / np.max(disps_side)), fps=30, quality=8)
 
         if (i % args.i_testset == 0):
             testsavedir = os.path.join(basedir, expname, 'testset_metrics_{:06d}'.format(i))
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
-                render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+                render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
+                            args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+                side_render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
+                            args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
         if i % args.i_print == 0:
             tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()}")
-            plt.plot(losses)
-            plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
-            plt.semilogy(losses)
-            plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
-            plt.close()
+            if i > 500:
+                plt.plot(losses)
+                plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
+                plt.semilogy(losses)
+                plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
+                plt.close()
 
         global_step += 1
 
