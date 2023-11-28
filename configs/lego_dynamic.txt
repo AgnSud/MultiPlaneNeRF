@@ -1,4 +1,4 @@
-expname = dnerf_lego_remove_inter__add_main_layers_changes__add_rgb_layer_changes
+expname = dnerf_lego_no_embed_ts__add_2ts__time_and_embed_after_grid_sample__add_sigma_layer_changes
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender
@@ -14,8 +14,8 @@ N_importance = 128
 N_rand = 1024
 
 mi_count = 50
-i_testset = 5000
-N_iter = 100000
+i_testset = 25000
+N_iter = 200000
 
 precrop_iters = 500
 precrop_iters_time = 2500

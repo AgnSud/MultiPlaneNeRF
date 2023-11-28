@@ -42,9 +42,13 @@ class RenderNetwork(torch.nn.Module):
             torch.nn.ReLU()
         )
         self.layers_sigma = torch.nn.Sequential(
-            torch.nn.Linear(256 + self.input_size, 128),  # dodane wejscie tutaj moze cos pomoze
+            torch.nn.Linear(256 + self.input_size + time_count, 256),  # dodane wejscie tutaj moze cos pomoze
             torch.nn.ReLU(),
-            torch.nn.Linear(128, 1)
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Linear(256, 1)
         )
         self.layers_rgb = torch.nn.Sequential(
             torch.nn.Linear(256 + self.input_size + dir_count + time_count, 256),
@@ -64,7 +68,7 @@ class RenderNetwork(torch.nn.Module):
         x2 = torch.concat([x, triplane_code, ts], dim=1)
         x = self.layers_main_3(x2)
 
-        xs = torch.concat([x, triplane_code], dim=1)
+        xs = torch.concat([x, triplane_code, ts], dim=1)
         sigma = self.layers_sigma(xs)
 
         x = torch.concat([x, triplane_code, dirs, ts], dim=1)
@@ -190,6 +194,15 @@ class ImagePlanes(torch.nn.Module):
 
         ts_time = ts[0].item()
         ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
+
+        # embedtime_fn, input_ch_time = get_embedder(10, 1)
+        # embed_ts = embedtime_fn(ts)
+        # embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
+        # ts_with_embed = torch.cat((ts, embed_ts_mean), 1)
+        #
+        # ts_with_embed = ts_with_embed.unsqueeze(0).unsqueeze(0)
+        # ts_with_embed = ts_with_embed.permute(0, 3, 1, 2)
+        # (1, 1, 256, 2) -> (1, 2, 1, 256)
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
