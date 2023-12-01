@@ -41,6 +41,7 @@ def batchify(fn, chunk):
         for i in range(0, num_batches, chunk):
 
             out, dx = fn(inputs_pos[i:i+chunk], inputs_time[i:i+chunk])
+            torch.cuda.empty_cache()  # try that to empty cache
             out_list += [out]
             dx_list += [dx]
         return torch.cat(out_list, 0), torch.cat(dx_list, 0)
@@ -87,6 +88,7 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
     all_ret = {}
     for i in range(0, rays_flat.shape[0], chunk):
         ret = render_rays(rays_flat[i:i + chunk], **kwargs)
+        torch.cuda.empty_cache() #try that to empty cache
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -390,7 +392,9 @@ def create_mi_nerf(plane, args):
     print("angles!!!", input_ch_views)
     # Use MultiImage
     model = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
+    model = model.to(device)
     grad_vars = list(model.parameters())
+
 
     model_fine = None
     if args.N_importance > 0:
@@ -954,6 +958,7 @@ def train():
 
     start = start + 1
     losses = []
+    first_losses = []
     for i in trange(start, N_iters):
         time0 = time.time()
 
@@ -1032,6 +1037,8 @@ def train():
 
         if i > 500:
             losses.append(loss.item())
+        if i <= 500:
+            first_losses.append(loss.item())
 
         loss.backward()
         optimizer.step()
@@ -1106,6 +1113,10 @@ def train():
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
                 plt.semilogy(losses)
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
+                plt.close()
+            if i < 500:
+                plt.plot(first_losses)
+                plt.savefig(os.path.join(basedir, expname, f'first_loss_plot.png'))
                 plt.close()
 
         global_step += 1

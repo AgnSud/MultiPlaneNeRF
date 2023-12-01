@@ -17,12 +17,6 @@ class RenderNetwork(torch.nn.Module):
             torch.nn.Linear(self.input_size, 512),
             torch.nn.ReLU(),
             torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
             torch.nn.ReLU()
         )
         self.layers_main_2 = torch.nn.Sequential(
@@ -35,8 +29,6 @@ class RenderNetwork(torch.nn.Module):
         )
         self.layers_main_3 = torch.nn.Sequential(
             torch.nn.Linear(512 + self.input_size + time_count, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
             torch.nn.Linear(512, 256),
             torch.nn.ReLU()
@@ -62,8 +54,8 @@ class RenderNetwork(torch.nn.Module):
         triplane_code = torch.concat([triplane_code, ts], dim=1)
         x = self.layers_main(triplane_code)
 
-        # x1 = torch.concat([x, triplane_code, ts], dim=1)
-        # x = self.layers_main_2(x1)
+        x1 = torch.concat([x, triplane_code, ts], dim=1)
+        x = self.layers_main_2(x1)
 
         x2 = torch.concat([x, triplane_code, ts], dim=1)
         x = self.layers_main_3(x2)
@@ -193,15 +185,16 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels.permute(0, 2, 1)
 
         ts_time = ts[0].item()
-        ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
+        # ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
 
-        # embedtime_fn, input_ch_time = get_embedder(10, 1)
-        # embed_ts = embedtime_fn(ts)
-        # embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
-        # ts_with_embed = torch.cat((ts, embed_ts_mean), 1)
-        #
-        # ts_with_embed = ts_with_embed.unsqueeze(0).unsqueeze(0)
-        # ts_with_embed = ts_with_embed.permute(0, 3, 1, 2)
+        embedtime_fn, input_ch_time = get_embedder(10, 1)
+        embed_ts = embedtime_fn(ts)
+        embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
+        ts_with_embed = torch.cat((ts, embed_ts_mean), 1)
+
+        ts_with_embed = ts_with_embed.unsqueeze(0).unsqueeze(0)
+        ts_with_embed = ts_with_embed.permute(0, 3, 1, 2)
+        # ts_with_embed = ts_with_embed.expand(-1, 2, -1, -1)
         # (1, 1, 256, 2) -> (1, 2, 1, 256)
 
         feats = []
@@ -220,7 +213,7 @@ class ImagePlanes(torch.nn.Module):
             time_channel = time_and_embed.unsqueeze(0).unsqueeze(2).unsqueeze(3)
             time_channel = time_channel.expand(-1, -1, -1, feat.shape[-1])
 
-            feat = torch.cat((feat, time_channel, ts), 1)
+            feat = torch.cat((feat, time_channel, ts_with_embed), 1)
             feats.append(feat)
 
         feats = torch.stack(feats).squeeze(1)
