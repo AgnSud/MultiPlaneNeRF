@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm, trange
+import neptune
 
 import matplotlib.pyplot as plt
 
@@ -25,6 +26,8 @@ from multiplane_helpers import MultiImageNeRF, ImagePlanes, LLFFImagePlanes
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 np.random.seed(0)
 DEBUG = False
+run = neptune.init_run(project="agnsud/Dynamic-MultiPlaneNerf",
+                       api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2NDA5M2JhMi00M2I2LTQ3ZGEtYmQ1Zi0yYzZmODQ4NjNlN2UifQ==")
 
 
 def batchify(fn, chunk):
@@ -39,16 +42,15 @@ def batchify(fn, chunk):
         out_list = []
         dx_list = []
         for i in range(0, num_batches, chunk):
-
-            out, dx = fn(inputs_pos[i:i+chunk], inputs_time[i:i+chunk])
-            torch.cuda.empty_cache()  # try that to empty cache
+            out, dx = fn(inputs_pos[i:i + chunk], inputs_time[i:i + chunk])
             out_list += [out]
             dx_list += [dx]
         return torch.cat(out_list, 0), torch.cat(dx_list, 0)
+
     return ret
 
 
-def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedtime_fn, netchunk=1024*64,
+def run_network(inputs, viewdirs, frame_time, fn, embed_fn, embeddirs_fn, embedtime_fn, netchunk=1024 * 64,
                 embd_time_discr=True):
     """Prepares inputs and applies network 'fn'.
     """
@@ -88,7 +90,6 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
     all_ret = {}
     for i in range(0, rays_flat.shape[0], chunk):
         ret = render_rays(rays_flat[i:i + chunk], **kwargs)
-        torch.cuda.empty_cache() #try that to empty cache
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -98,10 +99,10 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
     return all_ret
 
 
-def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
-                  near=0., far=1., frame_time=None,
-                  use_viewdirs=False, c2w_staticcam=None,
-                  **kwargs):
+def render(H, W, K, chunk=1024 * 32, rays=None, c2w=None, ndc=True,
+           near=0., far=1., frame_time=None,
+           use_viewdirs=False, c2w_staticcam=None,
+           **kwargs):
     """Render rays
     Args:
       H: int. Height of image in pixels.
@@ -149,7 +150,7 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     rays_o = torch.reshape(rays_o, [-1, 3]).float()
     rays_d = torch.reshape(rays_d, [-1, 3]).float()
 
-    near, far = near * torch.ones_like(rays_d[...,:1]), far * torch.ones_like(rays_d[...,:1])
+    near, far = near * torch.ones_like(rays_d[..., :1]), far * torch.ones_like(rays_d[..., :1])
     frame_time = frame_time * torch.ones_like(rays_d[..., :1])
     rays = torch.cat([rays_o, rays_d, near, far, frame_time], -1)
     # rays = torch.cat([rays_o, rays_d, near, far], -1)
@@ -167,7 +168,9 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     ret_dict = {k: all_ret[k] for k in all_ret if k not in k_extract}
     return ret_list + [ret_dict]
 
-def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
+
+def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None,
+                     render_factor=0):
     H, W, focal = hwf
     parser = config_parser()
     args = parser.parse_args()
@@ -184,31 +187,31 @@ def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, g
     t = time.time()
 
     side_position = [
-                [
-                    -0.3842804431915283,
-                    -0.2877247631549835,
-                    0.8772359490394592,
-                    3.5362513065338135
-                ],
-                [
-                    0.9232164025306702,
-                    -0.11976281553506851,
-                    0.36514148116111755,
-                    1.4719324111938477
-                ],
-                [
-                    0.0,
-                    0.9501954317092896,
-                    0.3116547167301178,
-                    1.2563203573226929
-                ],
-                [
-                    0.0,
-                    0.0,
-                    0.0,
-                    1.0
-                ]
-            ]
+        [
+            -0.3842804431915283,
+            -0.2877247631549835,
+            0.8772359490394592,
+            3.5362513065338135
+        ],
+        [
+            0.9232164025306702,
+            -0.11976281553506851,
+            0.36514148116111755,
+            1.4719324111938477
+        ],
+        [
+            0.0,
+            0.9501954317092896,
+            0.3116547167301178,
+            1.2563203573226929
+        ],
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+        ]
+    ]
 
     side_render_times = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     side_poses = torch.tensor([side_position] * len(side_render_times)).cuda()
@@ -262,7 +265,7 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
         print(i, time.time() - t)
         t = time.time()
 
-        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], frame_time=frame_time, **render_kwargs)
+        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3, :4], frame_time=frame_time, **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
 
@@ -313,12 +316,11 @@ def create_nerf(args):
                           use_viewdirs=args.use_viewdirs).to(device)
         grad_vars += list(model_fine.parameters())
 
-
-    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
-                                                                embed_fn=embed_fn,
-                                                                embeddirs_fn=embeddirs_fn,
-                                                                embedtime_fn=embedtime_fn,
-                                                                netchunk=args.netchunk)
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn: run_network(inputs, viewdirs, ts, network_fn,
+                                                                            embed_fn=embed_fn,
+                                                                            embeddirs_fn=embeddirs_fn,
+                                                                            embedtime_fn=embedtime_fn,
+                                                                            netchunk=args.netchunk)
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -392,22 +394,18 @@ def create_mi_nerf(plane, args):
     print("angles!!!", input_ch_views)
     # Use MultiImage
     model = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
-    model = model.to(device)
     grad_vars = list(model.parameters())
-
 
     model_fine = None
     if args.N_importance > 0:
         model_fine = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
         grad_vars += list(model_fine.parameters())
 
-
-    network_query_fn = lambda inputs, viewdirs, ts, network_fn : run_network(inputs, viewdirs, ts, network_fn,
-                                                                embed_fn=embed_fn,
-                                                                embeddirs_fn=embeddirs_fn,
-                                                                embedtime_fn=embedtime_fn,
-                                                                netchunk=args.netchunk)
-
+    network_query_fn = lambda inputs, viewdirs, ts, network_fn: run_network(inputs, viewdirs, ts, network_fn,
+                                                                            embed_fn=embed_fn,
+                                                                            embeddirs_fn=embeddirs_fn,
+                                                                            embedtime_fn=embedtime_fn,
+                                                                            netchunk=args.netchunk)
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -557,10 +555,10 @@ def render_rays(ray_batch,
     """
     N_rays = ray_batch.shape[0]
 
-    rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
-    viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
-    bounds = torch.reshape(ray_batch[...,6:9], [-1,1,3])
-    near, far, frame_time = bounds[...,0], bounds[...,1], bounds[...,2] # [-1,1]
+    rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
+    viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
+    bounds = torch.reshape(ray_batch[..., 6:9], [-1, 1, 3])
+    near, far, frame_time = bounds[..., 0], bounds[..., 1], bounds[..., 2]  # [-1,1]
 
     t_vals = torch.linspace(0., 1., steps=N_samples)
     if not lindisp:
@@ -588,11 +586,10 @@ def render_rays(ray_batch,
 
     pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]  # [N_rays, N_samples, 3]
 
-
-
-#     raw = run_network(pts)
+    #     raw = run_network(pts)
     raw, position_delta = network_query_fn(pts, viewdirs, frame_time, network_fn)
-    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
+    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd,
+                                                                 pytest=pytest)
 
     if N_importance > 0:
         rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
@@ -607,7 +604,7 @@ def render_rays(ray_batch,
 
         run_fn = network_fn if network_fine is None else network_fine
 
-#         raw = run_network(pts, fn=run_fn)
+        #         raw = run_network(pts, fn=run_fn)
 
         raw, position_delta = network_query_fn(pts, viewdirs, frame_time, run_fn)
 
@@ -646,7 +643,7 @@ def config_parser():
     parser.add_argument("--N_iter", type=int, default=500000,
                         help='num training iterations')
 
-    parser.add_argument("--netdepth", type=int, default=8, 
+    parser.add_argument("--netdepth", type=int, default=8,
                         help='layers in network')
     parser.add_argument("--netwidth", type=int, default=256,
                         help='channels per layer')
@@ -748,8 +745,7 @@ def config_parser():
     parser.add_argument("--divide_fac", type=int, default=1,
                         help='divide img size by this number')
 
-    
-    parser.add_argument("--mi_count",   type=int, default=100, #before: default=100
+    parser.add_argument("--mi_count", type=int, default=100,  # before: default=100
                         help='mi count')
 
     return parser
@@ -791,14 +787,15 @@ def train():
 
     elif args.dataset_type == 'blender':
 
-        images, poses, times, render_poses, render_times, hwf, i_split = load_blender_data(args.datadir, args.divide_fac, args.testskip)
+        images, poses, times, render_poses, render_times, hwf, i_split = load_blender_data(args.datadir,
+                                                                                           args.divide_fac,
+                                                                                           args.testskip)
         print('Loaded blender', images.shape, render_poses.shape, hwf, args.datadir)
         print(i_split)
         i_train, i_val, i_test = i_split
 
         near = 2.
         far = 6.
-
 
         if args.white_bkgd:
             fifth_channel = images[..., -1:]
@@ -876,7 +873,8 @@ def train():
     print(images[0])
     if args.dataset_type != 'llff':
 
-        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(ImagePlanes(focal, poses, images, times, args.mi_count), args) #create_nerf(args)
+        render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(
+            ImagePlanes(focal, poses, images, times, args.mi_count), args)  # create_nerf(args)
     else:
         render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_mi_nerf(
             LLFFImagePlanes(hwf, poses, images, args.mi_count), args)
@@ -946,7 +944,6 @@ def train():
     if use_batching:
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
-
     N_iters = args.N_iter + 1
     print('Begin')
     print('TRAIN views are', i_train)
@@ -958,7 +955,6 @@ def train():
 
     start = start + 1
     losses = []
-    first_losses = []
     for i in trange(start, N_iters):
         time0 = time.time()
 
@@ -1021,8 +1017,8 @@ def train():
 
         #####  Core optimization loop  #####
         rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, rays=batch_rays, frame_time=frame_time,
-                                                verbose=i < 10, retraw=True,
-                                                **render_kwargs_train)
+                                        verbose=i < 10, retraw=True,
+                                        **render_kwargs_train)
 
         optimizer.zero_grad()
         img_loss = img2mse(rgb, target_s)
@@ -1037,8 +1033,7 @@ def train():
 
         if i > 500:
             losses.append(loss.item())
-        if i <= 500:
-            first_losses.append(loss.item())
+            run["training/loss_plot"].append(loss)
 
         loss.backward()
         optimizer.step()
@@ -1076,24 +1071,24 @@ def train():
                 }, path)
                 print('Saved checkpoints at', path)
 
-
-        if (i%args.i_video==0 and i > 0):
+        if (i % args.i_video == 0 and i > 0):
             # Turn on testing mode
             with torch.no_grad():
                 rgbs, disps = render_path(render_poses, render_times, hwf, K, args.chunk,
                                           render_kwargs_test, gt_imgs=images[i_test])
-                rgbs_side, disps_side = side_render_path(render_poses, render_times, hwf, K, args.chunk,
-                                                         render_kwargs_test, gt_imgs=images[i_test])
+                # rgbs_side, disps_side = side_render_path(render_poses, render_times, hwf, K, args.chunk,
+                #                                          render_kwargs_test, gt_imgs=images[i_test])
 
-            print('Done, saving', rgbs.shape, disps.shape, rgbs_side.shape, disps_side.shape)
+            # print('Done, saving', rgbs.shape, disps.shape, rgbs_side.shape, disps_side.shape)
+            print('Done, saving', rgbs.shape, disps.shape)
 
             moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
             imageio.mimwrite(moviebase + 'disp.mp4', to8b(disps / np.max(disps)), fps=30, quality=8)
 
-            moviebase_side = os.path.join(basedir, expname, '{}_spiral_side{:06d}_'.format(expname, i))
-            imageio.mimwrite(moviebase_side + 'rgb.mp4', to8b(rgbs_side), fps=30, quality=8)
-            imageio.mimwrite(moviebase_side + 'disp.mp4', to8b(disps_side / np.max(disps_side)), fps=30, quality=8)
+            # moviebase_side = os.path.join(basedir, expname, '{}_spiral_side{:06d}_'.format(expname, i))
+            # imageio.mimwrite(moviebase_side + 'rgb.mp4', to8b(rgbs_side), fps=30, quality=8)
+            # imageio.mimwrite(moviebase_side + 'disp.mp4', to8b(disps_side / np.max(disps_side)), fps=30, quality=8)
 
         if (i % args.i_testset == 0):
             testsavedir = os.path.join(basedir, expname, 'testset_metrics_{:06d}'.format(i))
@@ -1103,7 +1098,7 @@ def train():
                 render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
                             args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
                 side_render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
-                            args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+                                 args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
         if i % args.i_print == 0:
@@ -1111,12 +1106,9 @@ def train():
             if i > 500:
                 plt.plot(losses)
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
-                plt.semilogy(losses)
-                plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
-                plt.close()
-            if i < 500:
-                plt.plot(first_losses)
-                plt.savefig(os.path.join(basedir, expname, f'first_loss_plot.png'))
+                run["plot"].upload(os.path.join(basedir, expname, f'loss_plot.png'))
+                # plt.semilogy(losses)
+                # plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
                 plt.close()
 
         global_step += 1

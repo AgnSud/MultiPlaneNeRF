@@ -1,4 +1,4 @@
-expname = dnerf_lego_add_embed_ts__512x3_512x3_512x2
+expname = dnerf_lego_change_input___remove_time_before_grid__add_only_embed_mean__add_embed_ts_mean_to_every_image__network_256x5_256x5_256x3
 basedir = ./logs
 datadir = ./data/lego_dynamic
 dataset_type = blender
