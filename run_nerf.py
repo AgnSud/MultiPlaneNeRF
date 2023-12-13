@@ -26,8 +26,6 @@ from multiplane_helpers import MultiImageNeRF, ImagePlanes, LLFFImagePlanes
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 np.random.seed(0)
 DEBUG = False
-run = neptune.init_run(project="agnsud/Dynamic-MultiPlaneNerf",
-                       api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2NDA5M2JhMi00M2I2LTQ3ZGEtYmQ1Zi0yYzZmODQ4NjNlN2UifQ==")
 
 
 def batchify(fn, chunk):
@@ -1033,7 +1031,6 @@ def train():
 
         if i > 500:
             losses.append(loss.item())
-            run["training/loss_plot"].append(loss)
 
         loss.backward()
         optimizer.step()
@@ -1106,7 +1103,6 @@ def train():
             if i > 500:
                 plt.plot(losses)
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
-                run["plot"].upload(os.path.join(basedir, expname, f'loss_plot.png'))
                 # plt.semilogy(losses)
                 # plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
                 plt.close()
