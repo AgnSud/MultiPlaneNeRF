@@ -1,5 +1,6 @@
-expname = dnerf_lego__add_time_and_embed__add_ts_and_embed_after_grid__change_config_512x5-512x3
-datadir = ./data/lego_dynamic
+expname = dnerf_hook__add_time_and_embed__add_ts_and_embed_after_grid__change_config_512x2-512+1024-512+1024
+basedir = ./logs
+datadir = ./data/hook
 dataset_type = blender
 
 no_batching = True
@@ -8,11 +9,11 @@ use_viewdirs = True
 white_bkgd = True
 lrate_decay = 500
 
-N_samples = 32
+N_samples = 16
 N_importance = 64
 N_rand = 512
 
-mi_count = 50
+mi_count = 100
 
 i_testmake = 200
 i_testset = 100000
@@ -24,6 +25,4 @@ netchunk = 32768
 precrop_iters = 500
 precrop_frac = 0.5
 
-half_res = False
-
-
+half_res = True

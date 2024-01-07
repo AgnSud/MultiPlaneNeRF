@@ -9,6 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm, trange
 import neptune
+from neptune.integrations.pytorch import NeptuneLogger
+
 
 import matplotlib.pyplot as plt
 
@@ -26,6 +28,8 @@ from multiplane_helpers import MultiImageNeRF, ImagePlanes, LLFFImagePlanes
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 np.random.seed(0)
 DEBUG = False
+run = neptune.init_run(project="agnsud/Dynamic-MultiPlaneNerf",
+    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2NDA5M2JhMi00M2I2LTQ3ZGEtYmQ1Zi0yYzZmODQ4NjNlN2UifQ==")
 
 
 def batchify(fn, chunk):
@@ -41,6 +45,7 @@ def batchify(fn, chunk):
         dx_list = []
         for i in range(0, num_batches, chunk):
             out, dx = fn(inputs_pos[i:i + chunk], inputs_time[i:i + chunk])
+            torch.cuda.empty_cache()  # try that to empty cache
             out_list += [out]
             dx_list += [dx]
         return torch.cat(out_list, 0), torch.cat(dx_list, 0)
@@ -88,6 +93,7 @@ def batchify_rays(rays_flat, chunk=1024 * 32, **kwargs):
     all_ret = {}
     for i in range(0, rays_flat.shape[0], chunk):
         ret = render_rays(rays_flat[i:i + chunk], **kwargs)
+        torch.cuda.empty_cache()  # try that to empty cache
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -236,13 +242,14 @@ def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, g
             rgb8 = to8b(rgbs[-1])
             filename = os.path.join(savedir, '{:03d}_side.png'.format(i))
             imageio.imwrite(filename, rgb8)
+            run["images/{:03d}_side".format(i)].upload(os.path.join(savedir, '{:03d}_side.png'.format(i)))
 
     rgbs = np.stack(rgbs, 0)
     disps = np.stack(disps, 0)
     print(type(gt_imgs))
     return rgbs, disps
 
-
+test_loss = []
 def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
     H, W, focal = hwf
     parser = config_parser()
@@ -259,13 +266,17 @@ def render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, gt_img
     rgbs_diff = []
 
     t = time.time()
+
     for i, (c2w, frame_time) in enumerate(zip(tqdm(render_poses), render_times)):
         print(i, time.time() - t)
         t = time.time()
 
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3, :4], frame_time=frame_time, **render_kwargs)
+
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
+
+
 
         if savedir is not None:
             img_diff = gt_imgs[i, :, :, :3] - rgb
@@ -393,6 +404,8 @@ def create_mi_nerf(plane, args):
     # Use MultiImage
     model = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
     grad_vars = list(model.parameters())
+
+    neptune_callback = NeptuneLogger(run=run, model=model)
 
     model_fine = None
     if args.N_importance > 0:
@@ -666,6 +679,10 @@ def config_parser():
     parser.add_argument("--ft_path", type=str, default=None,
                         help='specific weights npy file to reload for coarse network')
 
+    # show test results
+    parser.add_argument("--i_testmake", type=int, default=100,
+                        help='frequency of making test')
+
     # rendering options
     parser.add_argument("--N_samples", type=int, default=64,
                         help='number of coarse samples per ray')
@@ -727,7 +744,7 @@ def config_parser():
     parser.add_argument("--llffhold", type=int, default=8,
                         help='will take every 1/N images as LLFF test set, paper uses 8')
 
-    # logging/saving options
+    # loggaing/saving options
     parser.add_argument("--i_print", type=int, default=100,
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_img", type=int, default=500,
@@ -953,6 +970,9 @@ def train():
 
     start = start + 1
     losses = []
+    test_losses = []
+    psnr_plot = []
+    test_psnr_plot = []
     for i in trange(start, N_iters):
         time0 = time.time()
 
@@ -1027,10 +1047,13 @@ def train():
         if 'rgb0' in extras:
             img_loss0 = img2mse(extras['rgb0'], target_s)
             loss = loss + img_loss0
-            psnr0 = mse2psnr(img_loss0)
+            psnr = mse2psnr(img_loss0)
 
         if i > 500:
+            psnr_plot.append(psnr.item())
             losses.append(loss.item())
+            run["training/loss_plot"].append(loss)
+            run["training/psnr_plot"].append(psnr)
 
         loss.backward()
         optimizer.step()
@@ -1094,17 +1117,65 @@ def train():
             with torch.no_grad():
                 render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
                             args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
-                side_render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
-                                 args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
+                # side_render_path(torch.Tensor(poses[i_test]).to(device), torch.Tensor(times[i_test]).to(device), hwf, K,
+                #                  args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
+
+        if (i % args.i_testmake == 0 and i > min(500, args.precrop_iters) ):
+            with torch.no_grad():
+                test_img_i = np.random.choice(i_test)
+                test_target = images[test_img_i]
+                test_target = test_target[:, :, :-1]
+                test_target = torch.Tensor(test_target).to(device)
+                test_pose = poses[test_img_i, :3, :4]
+                test_frame_time = times[test_img_i]
+
+                test_rays_o, test_rays_d = get_rays(H, W, K, torch.Tensor(test_pose))
+
+                test_rays_o = test_rays_o[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+                test_rays_d = test_rays_d[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+                test_batch_rays = torch.stack([test_rays_o, test_rays_d], 0)
+                test_target_s = test_target[select_coords[:, 0], select_coords[:, 1]]
+
+                test_rgb, _, _, _ = render(H, W, K, chunk=args.chunk, rays=test_batch_rays, frame_time=test_frame_time,
+                                               verbose=i < 10, retraw=True,
+                                               **render_kwargs_test)
+                torch.cuda.empty_cache()  # try that to empty cache
+
+                test_loss = img2mse(test_rgb, test_target_s)
+                test_psnr = mse2psnr(test_loss)
+
+                test_psnr_plot.append(test_psnr.item())
+                test_losses.append(test_loss.item())
+
+                run["test/test_loss_plot"].append(test_loss)
+                run["test/test_psnr_plot"].append(test_psnr)
+                tqdm.write(f"[TEST] Iter: {i} test Loss: {test_loss.item()}  test PSNR: {test_psnr.item()}")
+
+                plt.plot(test_losses)
+                plt.savefig(os.path.join(basedir, expname, f'test_loss_plot.png'))
+                run["test_loss_plot_image"].upload(os.path.join(basedir, expname, f'test_loss_plot.png'))
+                plt.close()
+
+                plt.plot(test_psnr_plot)
+                plt.savefig(os.path.join(basedir, expname, f'test_psnr_plot.png'))
+                run["test_psnr_plot_image"].upload(os.path.join(basedir, expname, f'test_psnr_plot.png'))
+                plt.close()
+
 
         if i % args.i_print == 0:
             tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()}")
             if i > 500:
                 plt.plot(losses)
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
+                run["plot"].upload(os.path.join(basedir, expname, f'loss_plot.png'))
                 # plt.semilogy(losses)
                 # plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
+                plt.close()
+
+                plt.plot(psnr_plot)
+                plt.savefig(os.path.join(basedir, expname, f'psnr_plot.png'))
+                run["psnr_plot_image"].upload(os.path.join(basedir, expname, f'psnr_plot.png'))
                 plt.close()
 
         global_step += 1
