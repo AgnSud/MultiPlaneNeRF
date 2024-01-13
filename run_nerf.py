@@ -770,6 +770,8 @@ def train():
     parser = config_parser()
     args = parser.parse_args()
 
+    run["config_files"].upload_files(["multiplane_helpers.py", str(args.config)])
+
     # Load data
     K = None
     if args.dataset_type == 'llff':

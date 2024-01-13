@@ -1,4 +1,4 @@
-expname = dnerf_standup__add_time_and_embed__add_2ts_after_grid__change_NRand_512x2-512+1024-512+1024
+expname = dnerf_standup__back_to_linear_interpolation__512x2-512+1024-512+1024
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -11,7 +11,7 @@ lrate_decay = 500
 
 N_samples = 16
 N_importance = 64
-N_rand = 512
+N_rand = 256
 
 mi_count = 150
 

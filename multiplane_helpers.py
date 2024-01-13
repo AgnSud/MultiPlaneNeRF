@@ -182,48 +182,67 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels * 2.0 - 1.0
         pixels = pixels.permute(0, 2, 1)
 
-        times = []
-
         ts_time = ts[0].item()
-        # ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
+        ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
 
-        embedtime_fn, input_ch_time = get_embedder(10, 1)
-        embed_ts = embedtime_fn(ts)
-        embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
-        ts_with_embed = torch.cat((ts, embed_ts_mean), 1)
-
-        ts_with_embed = ts_with_embed.unsqueeze(0).unsqueeze(0)
-        ts_with_embed = ts_with_embed.permute(0, 3, 1, 2)
+        # embedtime_fn, input_ch_time = get_embedder(10, 1)
+        # embed_ts = embedtime_fn(ts)
+        # embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
+        # ts_with_embed = torch.cat((ts, embed_ts_mean), 1)
+        #
+        # ts_with_embed = ts_with_embed.unsqueeze(0).unsqueeze(0)
+        # ts_with_embed = ts_with_embed.permute(0, 3, 1, 2)
 
         # ts_with_embed = ts_with_embed.expand(-1, 2, -1, -1)
         # (1, 1, 256, 2) -> (1, 2, 1, 256)
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
-            frame = self.image_plane[img][:3, :, :]
-            # time = self.image_plane[img][3, 0, 0]
-            time_and_embed = self.image_plane[img][3:, 0, 0]
+            time1 = (self.time_channels[img]).item()
+            time2 = time1
+            if img != self.count - 1:
+                time2 = (self.time_channels[img + 1]).item()
 
+            weight1 = 1.0 - abs(ts_time - time1)
+            weight2 = 1.0 - abs(ts_time - time2)
+
+            frame1 = self.image_plane[img][:3, :, :]
+            frame2 = frame1
+            if img != self.count - 1:
+                frame2 = self.image_plane[img + 1][:3, :, :]
+
+            # time = self.image_plane[img][3, 0, 0]
+            # time_and_embed = self.image_plane[img][3:, 0, 0]
             # time_embed_mean = self.image_plane[img][4:, 0, 0].item()
             # times.append(time_and_embed.tolist())
 
+            interpolated_frame = weight1 * frame1 + weight2 * frame2
+            if weight1 > 0 or weight2 > 0:
+                min_val = interpolated_frame.min()
+                max_val = interpolated_frame.max()
+                interpolated_frame = (interpolated_frame - min_val) / (max_val - min_val)
+
             feat = F.grid_sample(
-                frame.unsqueeze(0),
+                interpolated_frame.unsqueeze(0),
                 pixels[img].unsqueeze(0).unsqueeze(0),
                 mode='bilinear',
                 padding_mode='zeros',
                 align_corners=False
             )
+            time_channel1 = time1 * torch.ones_like(feat[:, :1, :, :])
+            time_channel2 = time2 * torch.ones_like(feat[:, :1, :, :])
+            feat = torch.cat((feat, time_channel1, time_channel2, ts), 1)
 
-            time_channel = time_and_embed.unsqueeze(0).unsqueeze(2).unsqueeze(3)
+
+            # time_channel = time_and_embed.unsqueeze(0).unsqueeze(2).unsqueeze(3)
             # time_channel = time.unsqueeze(0).unsqueeze(2).unsqueeze(3)
-            time_channel = time_channel.expand(-1, -1, -1, feat.shape[-1])
+            # time_channel = time_channel.expand(-1, -1, -1, feat.shape[-1])
             # time_channel = torch.full((1, 1, 1, feat.shape[-1]), time)
 
             # feat = torch.cat((feat, time_channel, embed_ts_mean), 1)
 
             # feat = torch.cat((feat, time_channel, ts), 1)
-            feat = torch.cat((feat, time_channel, ts_with_embed), 1)
+            # feat = torch.cat((feat, time_channel, ts_with_embed), 1)
             # feat = torch.cat((feat, time_channel), 1)
             feats.append(feat)
 
