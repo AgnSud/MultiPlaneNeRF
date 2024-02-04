@@ -11,16 +11,20 @@ class RenderNetwork(torch.nn.Module):
     ):
         super().__init__()
         # r + g + b + posx2 + embed_time_mean + ts_time_mean + time_count * 2 (exact time + embed exact time mean)
-        self.input_size = 3 * input_size + input_size * 2 + 4 * input_size + time_count
+        self.input_size = 3 * input_size + input_size * 2 + 3 * input_size + time_count
         print("INPUT SIZE ", self.input_size)
         self.layers_main = torch.nn.Sequential(
             torch.nn.Linear(self.input_size, 512),
+            torch.nn.ReLU(),
+            torch.nn.Linear(512, 512),
             torch.nn.ReLU(),
             torch.nn.Linear(512, 512),
             torch.nn.ReLU()
         )
         self.layers_main_2 = torch.nn.Sequential(
             torch.nn.Linear(512 + self.input_size + time_count, 1024),
+            torch.nn.ReLU(),
+            torch.nn.Linear(1024, 1024),
             torch.nn.ReLU(),
             torch.nn.Linear(1024, 512),
             torch.nn.ReLU()
@@ -182,6 +186,8 @@ class ImagePlanes(torch.nn.Module):
         pixels = pixels * 2.0 - 1.0
         pixels = pixels.permute(0, 2, 1)
 
+        times = []
+
         ts_time = ts[0].item()
         ts = torch.full((1, 2, 1, ts.size(0)), ts_time)
 
@@ -198,50 +204,29 @@ class ImagePlanes(torch.nn.Module):
 
         feats = []
         for img in range(min(self.count, self.image_plane.shape[0])):
-            time1 = (self.time_channels[img]).item()
-            time2 = time1
-            if img != self.count - 1:
-                time2 = (self.time_channels[img + 1]).item()
-
-            weight1 = 1.0 - abs(ts_time - time1)
-            weight2 = 1.0 - abs(ts_time - time2)
-
-            frame1 = self.image_plane[img][:3, :, :]
-            frame2 = frame1
-            if img != self.count - 1:
-                frame2 = self.image_plane[img + 1][:3, :, :]
-
+            frame = self.image_plane[img][:3, :, :]
             # time = self.image_plane[img][3, 0, 0]
-            # time_and_embed = self.image_plane[img][3:, 0, 0]
+            time = self.image_plane[img][3, 0, 0]
+
             # time_embed_mean = self.image_plane[img][4:, 0, 0].item()
             # times.append(time_and_embed.tolist())
 
-            interpolated_frame = weight1 * frame1 + weight2 * frame2
-            if weight1 > 0 or weight2 > 0:
-                min_val = interpolated_frame.min()
-                max_val = interpolated_frame.max()
-                interpolated_frame = (interpolated_frame - min_val) / (max_val - min_val)
-
             feat = F.grid_sample(
-                interpolated_frame.unsqueeze(0),
+                frame.unsqueeze(0),
                 pixels[img].unsqueeze(0).unsqueeze(0),
                 mode='bilinear',
                 padding_mode='zeros',
                 align_corners=False
             )
-            time_channel1 = time1 * torch.ones_like(feat[:, :1, :, :])
-            time_channel2 = time2 * torch.ones_like(feat[:, :1, :, :])
-            feat = torch.cat((feat, time_channel1, time_channel2, ts), 1)
 
-
-            # time_channel = time_and_embed.unsqueeze(0).unsqueeze(2).unsqueeze(3)
+            # time_channel = time.unsqueeze(0).unsqueeze(2).unsqueeze(3)
             # time_channel = time.unsqueeze(0).unsqueeze(2).unsqueeze(3)
             # time_channel = time_channel.expand(-1, -1, -1, feat.shape[-1])
-            # time_channel = torch.full((1, 1, 1, feat.shape[-1]), time)
+            time_channel = torch.full((1, 1, 1, feat.shape[-1]), time)
 
             # feat = torch.cat((feat, time_channel, embed_ts_mean), 1)
 
-            # feat = torch.cat((feat, time_channel, ts), 1)
+            feat = torch.cat((feat, time_channel, ts), 1)
             # feat = torch.cat((feat, time_channel, ts_with_embed), 1)
             # feat = torch.cat((feat, time_channel), 1)
             feats.append(feat)
@@ -360,7 +345,9 @@ class MultiImageNeRF(torch.nn.Module):
         super(MultiImageNeRF, self).__init__()
         self.image_plane = image_plane
         self.time_count = 2
-        self.render_network = RenderNetwork(count, dir_count, self.time_count)
+        self.embed_count = 10
+        self.embedts_fn, self.input_ch_ts = get_embedder(self.embed_count, 1)
+        self.render_network = RenderNetwork(count, dir_count, self.time_count + self.input_ch_ts)
 
         self.input_ch_views = dir_count
 
@@ -370,14 +357,14 @@ class MultiImageNeRF(torch.nn.Module):
     def forward(self, x, ts):
         input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         x = self.image_plane(input_pts, ts)
-        ts = ts.expand(-1, self.time_count)
+        # ts = ts.expand(-1, self.time_count)
 
-        # embedts_fn, input_ch_ts = get_embedder(10, 1)
-        # embed_ts = embedts_fn(ts)
+        embed_ts = self.embedts_fn(ts)
         # embed_ts_mean = torch.mean(embed_ts, dim=1, keepdim=True)
         # embed_ts_mean = embed_ts_mean.expand(-1, self.time_count)
         # embed_ts_mean = embed_ts_mean.expand(-1, self.time_count)
-        # ts = torch.cat((ts, embed_ts_mean), 1)
+        ts = ts.expand(-1, self.time_count)
+        ts = torch.cat((ts, embed_ts), 1)
 
         # embed_view_fn, input_ch_view = get_embedder(10, 3)
         # embed_view = embed_view_fn(input_views)

@@ -1,4 +1,4 @@
-expname = dnerf_standup__back_to_linear_interpolation__512x2-512+1024-512+1024
+expname = dnerf_standup__add_time__add_2ts_after_grid__add_ts_embed10__s64_i64_r512_precrop2500_512x3-512+1024x2-512+1024
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -9,20 +9,21 @@ use_viewdirs = True
 white_bkgd = True
 lrate_decay = 500
 
-N_samples = 16
+N_samples = 64
 N_importance = 64
-N_rand = 256
+N_rand = 512
 
 mi_count = 150
 
 i_testmake = 200
 i_testset = 100000
-i_video = 150000
-N_iter = 300000
+i_video = 600000
+N_iter = 600000
 
 netchunk = 32768
 
 precrop_iters = 500
+precrop_iters_time = 2500
 precrop_frac = 0.5
 
 half_res = True
