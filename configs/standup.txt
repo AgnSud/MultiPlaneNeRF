@@ -1,4 +1,4 @@
-expname = dnerf_standup__add_time__add_2ts_after_grid__add_ts_embed10__s64_i64_r512_precrop2500_512x3-512+1024x2-512+1024
+expname = dnerf_standup__add_time_after_grid__add_ts30__s64_i64_r1024_precrop2500_512x4+512x3
 basedir = ./logs
 datadir = ./data/standup
 dataset_type = blender
@@ -11,14 +11,14 @@ lrate_decay = 500
 
 N_samples = 64
 N_importance = 64
-N_rand = 512
+N_rand = 1024
 
 mi_count = 150
 
 i_testmake = 200
 i_testset = 100000
-i_video = 600000
-N_iter = 600000
+i_video = 800000
+N_iter = 800000
 
 netchunk = 32768
 

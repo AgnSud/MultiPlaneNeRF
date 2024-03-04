@@ -8,8 +8,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm, trange
-import neptune
-from neptune.integrations.pytorch import NeptuneLogger
 
 
 import matplotlib.pyplot as plt
@@ -28,8 +26,6 @@ from multiplane_helpers import MultiImageNeRF, ImagePlanes, LLFFImagePlanes
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 np.random.seed(0)
 DEBUG = False
-run = neptune.init_run(project="agnsud/Dynamic-MultiPlaneNerf",
-    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2NDA5M2JhMi00M2I2LTQ3ZGEtYmQ1Zi0yYzZmODQ4NjNlN2UifQ==")
 
 
 def batchify(fn, chunk):
@@ -242,7 +238,6 @@ def side_render_path(render_poses, render_times, hwf, K, chunk, render_kwargs, g
             rgb8 = to8b(rgbs[-1])
             filename = os.path.join(savedir, '{:03d}_side.png'.format(i))
             imageio.imwrite(filename, rgb8)
-            run["images/{:03d}_side".format(i)].upload(os.path.join(savedir, '{:03d}_side.png'.format(i)))
 
     rgbs = np.stack(rgbs, 0)
     disps = np.stack(disps, 0)
@@ -404,8 +399,6 @@ def create_mi_nerf(plane, args):
     # Use MultiImage
     model = MultiImageNeRF(plane, args.mi_count, input_ch_views).to(device)
     grad_vars = list(model.parameters())
-
-    neptune_callback = NeptuneLogger(run=run, model=model)
 
     model_fine = None
     if args.N_importance > 0:
@@ -770,8 +763,6 @@ def train():
     parser = config_parser()
     args = parser.parse_args()
 
-    run["config_files"].upload_files(["multiplane_helpers.py", str(args.config)])
-
     # Load data
     K = None
     if args.dataset_type == 'llff':
@@ -1054,8 +1045,6 @@ def train():
         if i > 500:
             psnr_plot.append(psnr.item())
             losses.append(loss.item())
-            run["training/loss_plot"].append(loss)
-            run["training/psnr_plot"].append(psnr)
 
         loss.backward()
         optimizer.step()
@@ -1150,18 +1139,14 @@ def train():
                 test_psnr_plot.append(test_psnr.item())
                 test_losses.append(test_loss.item())
 
-                run["test/test_loss_plot"].append(test_loss)
-                run["test/test_psnr_plot"].append(test_psnr)
                 tqdm.write(f"[TEST] Iter: {i} test Loss: {test_loss.item()}  test PSNR: {test_psnr.item()}")
 
                 plt.plot(test_losses)
                 plt.savefig(os.path.join(basedir, expname, f'test_loss_plot.png'))
-                run["test_loss_plot_image"].upload(os.path.join(basedir, expname, f'test_loss_plot.png'))
                 plt.close()
 
                 plt.plot(test_psnr_plot)
                 plt.savefig(os.path.join(basedir, expname, f'test_psnr_plot.png'))
-                run["test_psnr_plot_image"].upload(os.path.join(basedir, expname, f'test_psnr_plot.png'))
                 plt.close()
 
 
@@ -1170,14 +1155,12 @@ def train():
             if i > 500:
                 plt.plot(losses)
                 plt.savefig(os.path.join(basedir, expname, f'loss_plot.png'))
-                run["plot"].upload(os.path.join(basedir, expname, f'loss_plot.png'))
                 # plt.semilogy(losses)
                 # plt.savefig(os.path.join(basedir, expname, f'loss_plot_logarithmic.png'))
                 plt.close()
 
                 plt.plot(psnr_plot)
                 plt.savefig(os.path.join(basedir, expname, f'psnr_plot.png'))
-                run["psnr_plot_image"].upload(os.path.join(basedir, expname, f'psnr_plot.png'))
                 plt.close()
 
         global_step += 1
